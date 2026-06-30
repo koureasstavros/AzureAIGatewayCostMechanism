@@ -1,0 +1,8 @@
+OpenAI Image V1 Generations
+---------------------------------------
+/openai/v1/images/generations
+---------------------------------------
+<rewrite-uri template="/openai/v1/images/generations" copy-unmatched-params="false" />
+---------------------------------------
+{"prompt":"string","negative_prompt":"string","image_prompt":{"image":"string","strength":1},"size":{},"output_format":"png","quality":"standard","n":1,"model":"string","seed":0}
+---------------------------------------

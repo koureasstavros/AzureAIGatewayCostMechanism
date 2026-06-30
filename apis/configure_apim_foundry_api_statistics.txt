@@ -1,0 +1,46 @@
+Generic Statistics
+---------------------------------------
+/statistics
+---------------------------------------
+<policies>
+    <!-- Throttle, authorize, validate, cache, or transform the requests -->
+    <inbound>
+        <base />
+    </inbound>
+    <!-- Control if and how the requests are forwarded to services  -->
+    <backend>
+        <base />
+    </backend>
+    <!-- Customize the responses -->
+    <outbound>
+        <base />
+        <!-- Calculate current year-month -->
+        <set-variable name="yearMonth" value="@{
+            return DateTime.UtcNow.ToString("yyyy-MM");
+        }" />
+        <!-- Load current accumulated cost from cache -->
+        <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
+        <return-response>
+            <set-status code="200" />
+            <set-header name="Content-Type" exists-action="override">
+                <value>application/json</value>
+            </set-header>
+            <set-body>@{
+                var consumed = Convert.ToDouble(context.Variables.GetValueOrDefault("storedCost", (object)0));
+                var quota      = 100;
+                var remaining  = quota - consumed;
+                var pct        = quota > 0 ? (double)Math.Round((double)consumed / quota * 100) : 0;
+                return Newtonsoft.Json.JsonConvert.SerializeObject(new {
+                    consumed  = consumed,
+                    quota = quota,
+                    remaining = remaining,
+                    pct = pct
+                });
+            }</set-body>
+        </return-response>
+    </outbound>
+    <!-- Handle exceptions and customize error responses  -->
+    <on-error>
+        <base />
+    </on-error>
+</policies>

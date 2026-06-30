@@ -1,0 +1,238 @@
+OpenAI Text Completions
+---------------------------------------
+/openai/deployments/{deployment}/chat/completions?api-version={api-version}" copy-unmatched-params="false" />
+---------------------------------------
+<set-variable name="deploymentName" value="@(context.Request.MatchedParameters["deployment"])" />
+<set-variable name="apiVersionName" value="@(context.Request.Url.Query.GetValueOrDefault("api-version"))" />
+<rewrite-uri template="@($"/openai/deployments/{context.Variables["deploymentName"]}/chat/completions?api-version={context.Variables["apiVersionName"]}")" copy-unmatched-params="false" />
+<set-variable name="requestBody" value="@{
+	var body = context.Request.Body.As<JObject>(preserveContent: true);
+	body["temperature"] = 1;   // <-- overwrite here
+	return body.ToString();
+}" />
+<!-- Replace request body -->
+<set-body>@((string)context.Variables["requestBody"])</set-body>
+---------------------------------------
+{"model":"GPT55-GS","messages":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"How are you?"}]}
+---------------------------------------
+<policies>
+    <inbound>
+        <base />
+        <set-variable name="deploymentName" value="@(context.Request.MatchedParameters["deployment"])" />
+        <set-variable name="apiVersionName" value="@(context.Request.Url.Query.GetValueOrDefault("api-version"))" />
+        <rewrite-uri template="@($"/openai/deployments/{context.Variables["deploymentName"]}/chat/completions?api-version={context.Variables["apiVersionName"]}")" copy-unmatched-params="false" />
+        <set-variable name="requestBody" value="@{
+            var body = context.Request.Body.As<JObject>(preserveContent: true);
+            body["temperature"] = 1;   // <-- overwrite here
+            return body.ToString();
+        }" />
+		<!-- Replace request body -->
+        <set-body>@((string)context.Variables["requestBody"])</set-body>
+        <set-variable name="modelId" value="@{
+            string raw = (string)context.Variables["requestBody"];
+            if (string.IsNullOrWhiteSpace(raw))
+            { return null; }
+            try
+            {
+                var body = JObject.Parse(raw);
+                return body?["model"]?.Value<string>();
+            }
+            catch
+            { return null; }
+        }" />
+        <!-- Calculate current year-month -->
+        <set-variable name="yearMonth" value="@{
+            return DateTime.UtcNow.ToString("yyyy-MM");
+        }" />
+        <!-- Load current accumulated cost from cache -->
+        <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
+        <!-- Block if already over limit before even hitting the backend -->
+        <choose>
+            <when condition="@(Convert.ToDouble(context.Variables.GetValueOrDefault("storedCost", (object)0)) > 100)">
+                <return-response>
+                    <set-status code="429" reason="Cost Limit Exceeded" />
+                    <set-body>Cost quota exceeded</set-body>
+                </return-response>
+            </when>
+        </choose>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+		<!-- Calculate current year-month -->
+        <set-variable name="yearMonth" value="@{
+            return DateTime.UtcNow.ToString("yyyy-MM");
+        }" />
+		<!-- 1. Read body ONCE into a variable -->
+        <set-variable name="responseBody" value="@(context.Response.Body.As<string>(preserveContent: true))" />
+        <set-variable name="isStreamingResponse" value="@{
+            string raw = (string)context.Variables["responseBody"];
+            if (string.IsNullOrWhiteSpace(raw)) 
+            { return false; }
+            string trimmed = raw.TrimStart();
+            return trimmed.Length == 0 || trimmed[0] != '{';
+        }" />
+        <set-variable name="responseJson" value="@{
+            string raw = (string)context.Variables["responseBody"];
+            if (string.IsNullOrWhiteSpace(raw))
+            { return new JObject(); }
+ 
+            bool isStreaming = (bool)context.Variables["isStreamingResponse"];
+ 
+            if (!isStreaming)
+            {
+                // --- Non-streaming path: body IS the response object directly ---
+                try { return JObject.Parse(raw); }
+                catch { return new JObject(); }
+            }
+ 
+            // --- Streaming path: scan SSE "data: " lines for response.completed ---
+            var lines = raw.Split('\n');
+ 
+            foreach (var rawLine in lines)
+            {
+                var line = rawLine.TrimEnd('\r').Trim();
+                if (!line.StartsWith("data: "))
+                { continue; }
+ 
+                var payload = line.Substring(6).Trim();
+                if (payload == "[DONE]" || string.IsNullOrWhiteSpace(payload))
+                { continue; }
+ 
+                try
+                {
+                    var evt = JObject.Parse(payload);
+                    var eventType = (string)evt["type"];
+ 
+                    if (eventType == "response.completed")
+                    {
+                        // The actual response object (with model, usage, etc.) is nested under "response"
+                        var inner = evt["response"] as JObject;
+                        if (inner != null)
+                        { return inner; }
+                    }
+                }
+                catch
+                {
+                    // Partial/malformed line (e.g. obfuscated delta payloads) — skip and keep scanning
+                    continue;
+                }
+            }
+ 
+            // No response.completed found — return empty object so downstream ?? defaults kick in
+            return new JObject();
+        }" />
+        <!-- 2. Extract token usage from the cached variable -->
+        <set-variable name="actualInputTokens" value="@{
+            var body = (JObject)context.Variables["responseJson"];
+            var inputTokens = body?["usage"]?["prompt_tokens"]?.Value<int>() ?? 0;
+            return inputTokens;
+        }" />
+        <set-variable name="actualOutputTokens" value="@{
+            var body = (JObject)context.Variables["responseJson"];
+            var outputTokens = body?["usage"]?["completions_tokens"]?.Value<int>() ?? 0;
+            return outputTokens;
+        }" />
+        <!-- 3. Load existing counters from cache -->
+        <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
+        <!-- 4. Cost rates -->
+        <set-variable name="inputCostPerM" value="@{
+            var model = (string)context.Variables["modelId"];
+            if (string.IsNullOrEmpty(model))
+            { return 0.0; }
+            if (model.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 5.0; } // Default fallback
+            return 5.0;
+        }" />
+        <set-variable name="outputCostPerM" value="@{
+            var model = (string)context.Variables["modelId"];
+            if (string.IsNullOrEmpty(model))
+            { return 0.0; }
+            if (model.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 30.0; } // Default fallback
+            return 30.0;
+        }" />
+        <!-- 5. Calculate cost -->
+        <set-variable name="inputCost" value="@{
+            double rate = (double)context.Variables["inputCostPerM"];
+			double tokens = (double)(int)context.Variables["actualInputTokens"];
+			return rate * tokens / 1000000.0;
+        }" />
+        <set-variable name="outputCost" value="@{
+            double rate = (double)context.Variables["outputCostPerM"];
+			double tokens = (double)(int)context.Variables["actualOutputTokens"];
+			return rate * tokens / 1000000.0;
+        }" />
+        <!-- 6. Calculate current cost -->
+        <set-variable name="currentCost" value="@{
+            double inputCost = (double)context.Variables["inputCost"];
+            double outputCost = (double)context.Variables["outputCost"];
+			double currentCost = inputCost + outputCost;
+            return currentCost;
+        }" />
+        <!-- 7. Increment counters -->
+        <set-variable name="newCostTotal" value="@{
+            double previous = 0;
+            if (context.Variables.ContainsKey("storedCost")) {
+                previous = (double)context.Variables["storedCost"];
+            }
+            double current = (double)context.Variables["currentCost"];
+            return previous + current;
+        }" />
+        <!-- 8. Store updated counters back into cache (30 days) -->
+        <cache-store-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newCostTotal"])" duration="2592000" />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>
+---------------------------------------
+{
+	"id": "string",
+	"object": "chat.completion",
+	"created": 0,
+	"model": "string",
+	"choices": [
+		{
+			"index": 0,
+			"finish_reason": {},
+			"message": {
+				"role": {},
+				"content": "string",
+				"reasoning_content": "string",
+				"tool_calls": [
+					{
+						"id": "string",
+						"type": "function",
+						"function": {
+							"name": "string",
+							"arguments": "string"
+						}
+					}
+				],
+				"audio": {
+					"id": "string",
+					"expires_at": 0,
+					"data": "string",
+					"format": {},
+					"transcript": "string"
+				}
+			}
+		}
+	],
+	"usage": {
+		"completion_tokens": 0,
+		"prompt_tokens": 0,
+		"total_tokens": 0,
+		"completion_tokens_details": {
+			"audio_tokens": 0,
+			"reasoning_tokens": 0,
+			"total_tokens": 0
+		},
+		"prompt_tokens_details": {
+			"audio_tokens": 0,
+			"cached_tokens": 0
+		}
+	}

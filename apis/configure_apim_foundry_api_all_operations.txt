@@ -1,0 +1,29 @@
+<policies>
+    <inbound>
+        <base />
+        <set-backend-service id="apim-generated-policy" backend-id="hub-gpe-shared-eastus2-001" />
+        <set-variable name="yearMonth" value="@{
+            return DateTime.UtcNow.ToString("yyyy-MM");
+        }" />
+        <!-- Load current accumulated cost from cache -->
+        <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
+        <!-- Block if already over limit before even hitting the backend -->
+        <choose>
+            <when condition="@(Convert.ToDouble(context.Variables.GetValueOrDefault("storedCost", (object)0)) > 100)">
+                <return-response>
+                    <set-status code="429" reason="Cost Limit Exceeded" />
+                    <set-body>Cost quota exceeded</set-body>
+                </return-response>
+            </when>
+        </choose>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

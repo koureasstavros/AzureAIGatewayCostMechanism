@@ -1,0 +1,29 @@
+customMetrics
+| where timestamp > startofmonth(now())
+| where name in ("Cost Correlation")
+| extend userId            = tostring(customDimensions["User ID"])
+| extend userEmail         = tostring(customDimensions["User Email"])
+| extend productId         = tostring(customDimensions["Product ID"])
+| extend productName       = tostring(customDimensions["Product Name"])
+| extend subscriptionId    = tostring(customDimensions["Subscription ID"])
+| extend subscriptionName  = tostring(customDimensions["Subscription Name"])
+| extend modelId           = tostring(customDimensions["Model ID"])
+| extend inputTokens       = tostring(customDimensions["Input Tokens"])
+| extend outputTokens      = tostring(customDimensions["Output Tokens"])
+| extend cost              = tostring(customDimensions["Cost"])
+//Filter empty
+| where userId <> ""
+| where productId <> ""
+// Pivot prompt vs completion into columns
+| summarize 
+    InputTokens  = sum(toint(inputTokens)),
+    OutputTokens = sum(toint(outputTokens)),
+    Cost         = sum(todouble(cost))
+    by userEmail, productName, subscriptionName, modelId
+| extend modelId
+| extend InputTokens
+| extend OutputTokens
+| extend TotalTokens = InputTokens + OutputTokens
+| extend Cost
+| extend QuotaCost = 100
+| extend RatioCost = (Cost / QuotaCost) * 100

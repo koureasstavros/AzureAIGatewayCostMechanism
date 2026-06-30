@@ -1,0 +1,10 @@
+OpenAI Image Generations
+---------------------------------------
+/openai/deployments/{deployment}/image/generations?api-version={api-version}
+---------------------------------------
+<set-variable name="deploymentName" value="@(context.Request.MatchedParameters["deployment"])" />
+<set-variable name="apiVersionName" value="@(context.Request.Url.Query.GetValueOrDefault("api-version"))" />
+<rewrite-uri template="@($"/openai/deployments/{context.Variables["deploymentName"]}/image/generations?api-version={context.Variables["apiVersionName"]}")" copy-unmatched-params="false" />
+---------------------------------------
+{"prompt":"string","negative_prompt":"string","image_prompt":{"image":"string","strength":1},"size":{},"output_format":"png","quality":"standard","n":1,"model":"string","seed":0}
+---------------------------------------
