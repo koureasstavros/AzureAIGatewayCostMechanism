@@ -4,8 +4,6 @@ OpenAI Text V1 Embeddings
 ---------------------------------------
 <rewrite-uri template="/openai/v1/embeddings" copy-unmatched-params="false" />
 ---------------------------------------
-{"model":"ADA3-GS","input":"How are you?"}
----------------------------------------
 <policies>
     <inbound>
         <base />
@@ -121,9 +119,11 @@ OpenAI Text V1 Embeddings
             var model = (string)context.Variables["modelId"];
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
+			if (model.IndexOf("ADA2-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.1; }
             if (model.IndexOf("ADA3-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.2; } // Default fallback
-            return 0.02;
+            { return 0.13; }
+            return 0.2; // Default fallback
         }" />
         <!-- 5. Calculate cost -->
         <set-variable name="promptCost" value="@{
@@ -153,6 +153,8 @@ OpenAI Text V1 Embeddings
         <base />
     </on-error>
 </policies>
+---------------------------------------
+{"model":"<model-deployment>","input":"How are you?"}
 ---------------------------------------
 {
     "object": "list",

@@ -2,7 +2,7 @@
 language: ["en"]
 tags: ["ai", "foundry", "apim", "azure", "policy", "control", "report", "budget"]
 license: "apache-2.0"
-version: v0.0.1
+version: v0.0.2
 ---
 
 # 💸 Azure AI Gateway Cost Mechanism
@@ -11,11 +11,9 @@ version: v0.0.1
 
 ![AIGateway](material/gateway.png)
 
-
 ## 🧠 Description
 
 This repository contains reusable objects and configuration assets for implementing a **cost mechanism** on top of **Azure AI Gateway**, combining **Azure Foundry** and **APIM** capabilities.
-
 
 ## 💖 Sponsor
 
@@ -55,11 +53,11 @@ It also supports multiple providers, including:
 This setup can also be used behind AI developer tools such as:
 
 - **VS Code GitHub Copilot**
-- **VS Code Codex**
-- **VS Code Claude Code**
+- **VS Code OpenAI Codex**
+- **VS Code Anthropic Claude Code**
 - **GitHub Copilot desktop**
 - **OpenAI Codex desktop**
-- **Claude Code desktop**
+- **Anthropic Claude Code desktop**
 
 To support these clients, a **Front Door** layer is required in the middle.
 
@@ -73,9 +71,15 @@ The Front Door is used to:
 
 The mechanism can count and report:
 
-- **Input tokens**
-- **Output tokens**
-- **Seconds**
+- **Text**
+- - Input tokens
+- - Output tokens
+- **Image**
+- - Objects
+- **Audio**
+- - Seconds
+- **Video**
+- - Seconds
 
 ### ⚠️ Current limitation
 
@@ -88,10 +92,10 @@ The mechanism can count and report:
 The included assets cover common AI request types such as:
 
 - **Text generation**
-- **Embeddings**
-- **Image generation**
+- **Image generation and edit**
 - **Audio transcription**
-- **Video generation, download, and remix**
+- **Video generation and remix**
+- **Embeddings**
 
 ## 🔌 Supported providers
 
@@ -99,7 +103,6 @@ Provider coverage currently includes:
 
 - **OpenAI** operations
 - **Anthropic** operations
-
 
 ## 🎯 Use cases
 
@@ -139,6 +142,10 @@ The repository supports reporting scenarios for:
 - **Cached tokens are not included** in the current counting logic
 - AI tool connectivity requires **Front Door** in front of **APIM** for authorization-header handling
 - Front Door must remove the `Bearer ` schema/prefix before forwarding authorization data to **APIM**
+
+## ⚙️ Further thoughts
+
+- It would be more efficient if each call included built-in cost information. Alternatively, if exposing that through the APIs is not appropriate, it could be stored as internal AI Gateway metadata in a separate table.
 
 ## 🖼️ Gateway walkthrough
 

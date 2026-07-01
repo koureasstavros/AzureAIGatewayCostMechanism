@@ -5,8 +5,6 @@ OpenAI Text Responses
 <set-variable name="apiVersionName" value="@(context.Request.Url.Query.GetValueOrDefault("api-version"))" />
 <rewrite-uri template="@($"/openai/responses?api-version={context.Variables["apiVersionName"]}")" copy-unmatched-params="false" />
 ---------------------------------------
-{"model":"GPT55-GS","input":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"How are you?"}]}
----------------------------------------
 <policies>
     <inbound>
         <base />
@@ -127,6 +125,12 @@ OpenAI Text Responses
             var model = (string)context.Variables["modelId"];
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
+			if (model.IndexOf("GPT54NANO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.2; }
+            if (model.IndexOf("GPT54MINI-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.75; }
+            if (model.IndexOf("GPT54-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 2.5; }
             if (model.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 5.0; } // Default fallback
             return 5.0;
@@ -135,6 +139,12 @@ OpenAI Text Responses
             var model = (string)context.Variables["modelId"];
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
+			if (model.IndexOf("GPT54NANO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 1.25; }
+            if (model.IndexOf("GPT54MINI-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 4.5; }
+            if (model.IndexOf("GPT54-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 15.0; }
             if (model.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 30.0; } // Default fallback
             return 30.0;
@@ -173,6 +183,8 @@ OpenAI Text Responses
         <base />
     </on-error>
 </policies>
+---------------------------------------
+{"model":"<model-deployment>","input":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"How are you?"}]}
 ---------------------------------------
 {
     "id": "resp_019391a5d9091984006a3e4fbd97488197908d51ab5106c6f5",

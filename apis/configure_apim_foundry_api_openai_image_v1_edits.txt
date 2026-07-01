@@ -1,14 +1,14 @@
-OpenAI Image V1 Generations
+OpenAI Image V1 Edits
 ---------------------------------------
-/openai/v1/images/generations
+/openai/v1/images/edits
 ---------------------------------------
-<rewrite-uri template="/openai/v1/images/generations" copy-unmatched-params="false" />
+<rewrite-uri template="/openai/v1/images/edits" copy-unmatched-params="false" />
 ---------------------------------------
 <policies>
     <!-- Throttle, authorize, validate, cache, or transform the requests -->
     <inbound>
         <base />
-		<rewrite-uri template="/openai/v1/images/generations" copy-unmatched-params="false" />
+		<rewrite-uri template="/openai/v1/images/edits" copy-unmatched-params="false" />
 		<set-variable name="requestBody" value="@{
 			var body = context.Request.Body.As<JObject>(preserveContent: true);
 			body["response_format"] = "verbose_json";   // <-- overwrite here

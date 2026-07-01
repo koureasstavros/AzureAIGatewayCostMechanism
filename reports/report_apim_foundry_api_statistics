@@ -1,29 +1,37 @@
-customMetrics
-| where timestamp > startofmonth(now())
-| where name in ("Cost Correlation")
-| extend userId            = tostring(customDimensions["User ID"])
-| extend userEmail         = tostring(customDimensions["User Email"])
-| extend productId         = tostring(customDimensions["Product ID"])
-| extend productName       = tostring(customDimensions["Product Name"])
-| extend subscriptionId    = tostring(customDimensions["Subscription ID"])
-| extend subscriptionName  = tostring(customDimensions["Subscription Name"])
-| extend modelId           = tostring(customDimensions["Model ID"])
-| extend inputTokens       = tostring(customDimensions["Input Tokens"])
-| extend outputTokens      = tostring(customDimensions["Output Tokens"])
-| extend cost              = tostring(customDimensions["Cost"])
-//Filter empty
-| where userId <> ""
-| where productId <> ""
-// Pivot prompt vs completion into columns
-| summarize 
-    InputTokens  = sum(toint(inputTokens)),
-    OutputTokens = sum(toint(outputTokens)),
-    Cost         = sum(todouble(cost))
-    by userEmail, productName, subscriptionName, modelId
-| extend modelId
-| extend InputTokens
-| extend OutputTokens
-| extend TotalTokens = InputTokens + OutputTokens
-| extend Cost
+let requestCorr = customMetrics
+    | where timestamp > startofmonth(now())
+    | where name == "Request Correlation"
+    | extend
+        userId           = tostring(customDimensions["User ID"]),
+        userEmail        = tostring(customDimensions["User Email"]),
+        productId        = tostring(customDimensions["Product ID"]),
+        productName      = tostring(customDimensions["Product Name"]),
+        subscriptionId   = tostring(customDimensions["Subscription ID"]),
+        subscriptionName = tostring(customDimensions["Subscription Name"]),
+        apiId            = tostring(customDimensions["API ID"]),
+        operationId      = tostring(customDimensions["Operation ID"]),
+        requestId        = tostring(customDimensions["Request ID"])
+    | project userId, userEmail, productId, productName, subscriptionId, subscriptionName, apiId, operationId, requestId;
+let costCorr = customMetrics
+    | where timestamp > startofmonth(now())
+    | where name == "Cost Correlation"
+    | extend
+        requestId     = tostring(customDimensions["Request ID"]),
+        statusCode     = tostring(customDimensions["Status Code"]),
+        modelId      = tostring(customDimensions["Model ID"]),
+        inputTokens  = toint(customDimensions["Input Tokens"]),
+        outputTokens = toint(customDimensions["Output Tokens"]),
+        cost         = todouble(customDimensions["Cost"])
+    | project modelId, inputTokens, outputTokens, cost, requestId, statusCode;
+requestCorr
+| join kind=inner costCorr on requestId
+| where userId <> "" and productId <> ""
+| summarize
+    InputTokens  = sum(inputTokens),
+    OutputTokens = sum(outputTokens),
+    TotalTokens  = sum(inputTokens + outputTokens),
+    Cost         = sum(cost)
+    by userEmail, productName, subscriptionName, apiId, modelId, statusCode
 | extend QuotaCost = 100
 | extend RatioCost = (Cost / QuotaCost) * 100
+| project userEmail, productName, subscriptionName, apiId, statusCode, modelId, InputTokens, OutputTokens, Cost, QuotaCost, RatioCost;

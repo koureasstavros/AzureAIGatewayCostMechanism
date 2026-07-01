@@ -6,8 +6,6 @@ OpenAI Text Embeddings
 <set-variable name="apiVersionName" value="@(context.Request.Url.Query.GetValueOrDefault("api-version"))" />
 <rewrite-uri template="@($"/openai/deployments/{context.Variables["deploymentName"]}/embeddings?api-version={context.Variables["apiVersionName"]}")" copy-unmatched-params="false" />
 ---------------------------------------
-{"model":"ADA3-GS","input":"How are you?"}
----------------------------------------
 <policies>
     <!-- Throttle, authorize, validate, cache, or transform the requests -->
     <inbound>
@@ -127,10 +125,10 @@ OpenAI Text Embeddings
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
 			if (model.IndexOf("ADA2-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.1; } // Default fallback
+            { return 0.1; }
             if (model.IndexOf("ADA3-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.2; } // Default fallback
-            return 0.02;
+            { return 0.13; }
+            return 0.2; // Default fallback
         }" />
         <!-- 5. Calculate cost -->
         <set-variable name="promptCost" value="@{
@@ -160,6 +158,8 @@ OpenAI Text Embeddings
         <base />
     </on-error>
 </policies>
+---------------------------------------
+{"model":"<model-deployment>","input":"How are you?"}
 ---------------------------------------
 {
     "object": "list",

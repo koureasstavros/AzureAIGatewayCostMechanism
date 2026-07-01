@@ -13,8 +13,6 @@ OpenAI Text Completions
 <!-- Replace request body -->
 <set-body>@((string)context.Variables["requestBody"])</set-body>
 ---------------------------------------
-{"model":"GPT55-GS","messages":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"How are you?"}]}
----------------------------------------
 <policies>
     <inbound>
         <base />
@@ -142,17 +140,29 @@ OpenAI Text Completions
             var model = (string)context.Variables["modelId"];
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
+			if (model.IndexOf("GPT54NANO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.2; }
+            if (model.IndexOf("GPT54MINI-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.75; }
+			if (model.IndexOf("GPT54-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 2.5; }
             if (model.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 5.0; } // Default fallback
-            return 5.0;
+            { return 5.0; }
+            return 5.0; // Default fallback
         }" />
         <set-variable name="outputCostPerM" value="@{
             var model = (string)context.Variables["modelId"];
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
+			if (model.IndexOf("GPT54NANO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 1.25; }
+            if (model.IndexOf("GPT54MINI-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 4.5; }
+            if (model.IndexOf("GPT54-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 15.0; }
             if (model.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 30.0; } // Default fallback
-            return 30.0;
+            { return 30.0; }
+            return 30.0; // Default fallback
         }" />
         <!-- 5. Calculate cost -->
         <set-variable name="inputCost" value="@{
@@ -188,6 +198,8 @@ OpenAI Text Completions
         <base />
     </on-error>
 </policies>
+---------------------------------------
+{"model":"<model-deployment>","messages":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"How are you?"}]}
 ---------------------------------------
 {
 	"id": "string",

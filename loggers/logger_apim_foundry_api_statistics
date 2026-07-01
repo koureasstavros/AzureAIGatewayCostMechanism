@@ -1,0 +1,34 @@
+<emit-metric name="Request Correlation" value="1">
+    <dimension name="Request ID" value="@(context.RequestId.ToString())" />
+    <dimension name="User ID" value="@(context.User?.Id)" />
+    <dimension name="User Email" value="@(context.User?.Email)" />
+    <dimension name="Product ID" value="@(context.Product.Id)" />
+    <dimension name="Product Name" value="@(context.Product.Name)" />
+    <dimension name="Subscription ID" value="@(context.Subscription?.Id)" />
+    <dimension name="Subscription Name" value="@(context.Subscription?.Name)" />
+    <dimension name="API ID" value="@(context.Api.Id)" />
+    <dimension name="Operation ID" value="@(context.Operation.Id)" />
+</emit-metric>
+<emit-metric name="Cost Correlation" value="1">
+    <dimension name="Request ID" value="@(context.RequestId.ToString())" />
+    <dimension name="Status Code" value="@(context.Response.StatusCode.ToString())" />
+    <dimension name="Model ID" value="@(context.Variables.GetValueOrDefault("modelId",""))" />
+    <dimension name="Input Tokens" value="@{
+        int v = 0;
+        if (context.Variables.ContainsKey("actualInputTokens"))
+        { v = Convert.ToInt32(context.Variables["actualInputTokens"]); }
+        return v.ToString();
+    }" />
+    <dimension name="Output Tokens" value="@{
+        int v = 0;
+        if (context.Variables.ContainsKey("actualOutputTokens"))
+        { v = Convert.ToInt32(context.Variables["actualOutputTokens"]); }
+        return v.ToString();
+    }" />
+    <dimension name="Cost" value="@{
+        double v = 0.0;
+        if (context.Variables.ContainsKey("currentCost"))
+        { v = Convert.ToDouble(context.Variables["currentCost"]); }
+        return v.ToString("F6");
+    }" />
+</emit-metric>

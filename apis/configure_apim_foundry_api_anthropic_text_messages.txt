@@ -125,17 +125,25 @@ Anthropic Text Messages
             var model = (string)context.Variables["modelId"];
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
-            if (model.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 5.0; } // Default fallback
-            return 5.0;
+            if (model.IndexOf("claude-haiku-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 1.0; }
+            if (model.IndexOf("claude-sonnet-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 3.0; }
+            if (model.IndexOf("claude-opus-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 5.0; }
+            return 5.0; // Default fallback
         }" />
         <set-variable name="outputCostPerM" value="@{
             var model = (string)context.Variables["modelId"];
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
-            if (model.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 30.0; } // Default fallback
-            return 30.0;
+            if (model.IndexOf("claude-haiku-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 5.0; }
+            if (model.IndexOf("claude-sonnet-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 15.0; }
+            if (model.IndexOf("claude-opus-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 25.0; }
+            return 30.0; // Default fallback
         }" />
         <!-- 5. Calculate cost -->
         <set-variable name="inputCost" value="@{
@@ -172,7 +180,7 @@ Anthropic Text Messages
     </on-error>
 </policies>
 ---------------------------------------
-{"model":"claude-sonnet-4-6","max_tokens":1024,"messages":[{"role":"user","content":"string"}],"system":"string","stream":false,"top_k":0,"stop_sequences":["string"]}
+{"model":"<model-deployment>","max_tokens":1024,"messages":[{"role":"user","content":"string"}],"system":"string","stream":false,"top_k":0,"stop_sequences":["string"]}
 ---------------------------------------
 {
     "model": "claude-sonnet-4-6",

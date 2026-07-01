@@ -107,8 +107,8 @@ OpenAI Video V1 Generations
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
             if (model.IndexOf("SORA2-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.6; } // Default fallback
-            return 0.6;
+            { return 0.6; }
+            return 0.6; // Default fallback
         }" />
         <!-- 5. Calculate cost -->
         <set-variable name="totalCost" value="@{
@@ -141,7 +141,7 @@ OpenAI Video V1 Generations
 </policies>
 ---------------------------------------
 {
-  "model": "SORA2-GS",
+  "model": "<model-deployment>",
   "prompt": "test",
   "size": "720x1280",
   "seconds": "4"

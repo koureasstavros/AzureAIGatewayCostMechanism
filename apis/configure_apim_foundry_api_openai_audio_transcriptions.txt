@@ -124,8 +124,8 @@ OpenAI Audio Transcriptions
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
             if (model.IndexOf("WHISPER-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.36; } // Default fallback
-            return 0.5;
+            { return 0.36; }
+            return 0.5; // Default fallback
         }" />
         <!-- 5. Calculate cost -->
         <set-variable name="totalCost" value="@{
@@ -158,8 +158,8 @@ OpenAI Audio Transcriptions
 </policies>
 ---------------------------------------
 {
-  "model": "WHISPER-GS",
-  "file": "base64:",
+  "model": "<model-deployment>",
+  "file": "<base64-encoded-audio-data>",
   "response_format": "verbose_json"
 }
 ---------------------------------------

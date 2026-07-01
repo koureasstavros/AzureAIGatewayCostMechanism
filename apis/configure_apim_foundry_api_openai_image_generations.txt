@@ -6,5 +6,161 @@ OpenAI Image Generations
 <set-variable name="apiVersionName" value="@(context.Request.Url.Query.GetValueOrDefault("api-version"))" />
 <rewrite-uri template="@($"/openai/deployments/{context.Variables["deploymentName"]}/image/generations?api-version={context.Variables["apiVersionName"]}")" copy-unmatched-params="false" />
 ---------------------------------------
-{"prompt":"string","negative_prompt":"string","image_prompt":{"image":"string","strength":1},"size":{},"output_format":"png","quality":"standard","n":1,"model":"string","seed":0}
+<policies>
+    <!-- Throttle, authorize, validate, cache, or transform the requests -->
+    <inbound>
+        <base />
+		<set-variable name="deploymentName" value="@(context.Request.MatchedParameters["deployment"])" />
+		<set-variable name="apiVersionName" value="@(context.Request.Url.Query.GetValueOrDefault("api-version"))" />
+		<rewrite-uri template="@($"/openai/deployments/{context.Variables["deploymentName"]}/image/generations?api-version={context.Variables["apiVersionName"]}")" copy-unmatched-params="false" />
+		<set-variable name="requestBody" value="@{
+			var body = context.Request.Body.As<JObject>(preserveContent: true);
+			body["response_format"] = "verbose_json";   // <-- overwrite here
+			return body.ToString();
+		}" />
+		<!-- Replace request body -->
+		<set-body>@((string)context.Variables["requestBody"])</set-body>
+        <set-variable name="modelId" value="@{
+            string raw = (string)context.Variables["requestBody"];
+            if (string.IsNullOrWhiteSpace(raw))
+            { return null; }
+            try
+            {
+                var body = JObject.Parse(raw);
+                return body?["model"]?.Value<string>();
+            }
+            catch
+            { return null; }
+        }" />
+    </inbound>
+    <!-- Control if and how the requests are forwarded to services  -->
+    <backend>
+        <base />
+    </backend>
+    <!-- Customize the responses -->
+    <outbound>
+        <base />
+        <!-- Calculate current year-month -->
+        <set-variable name="yearMonth" value="@{
+            return DateTime.UtcNow.ToString("yyyy-MM");
+        }" />
+        <!-- 1. Read body ONCE into a variable -->
+        <set-variable name="responseBody" value="@(context.Response.Body.As<string>(preserveContent: true))" />
+        <set-variable name="isStreamingResponse" value="@{
+            string raw = (string)context.Variables["responseBody"];
+            if (string.IsNullOrWhiteSpace(raw)) 
+            { return false; }
+            string trimmed = raw.TrimStart();
+            return trimmed.Length == 0 || trimmed[0] != '{';
+        }" />
+        <set-variable name="responseJson" value="@{
+            string raw = (string)context.Variables["responseBody"];
+            if (string.IsNullOrWhiteSpace(raw))
+            { return new JObject(); }
+ 
+            bool isStreaming = (bool)context.Variables["isStreamingResponse"];
+ 
+            if (!isStreaming)
+            {
+                // --- Non-streaming path: body IS the response object directly ---
+                try { return JObject.Parse(raw); }
+                catch { return new JObject(); }
+            }
+ 
+            // --- Streaming path: scan SSE "data: " lines for response.completed ---
+            var lines = raw.Split('\n');
+ 
+            foreach (var rawLine in lines)
+            {
+                var line = rawLine.TrimEnd('\r').Trim();
+                if (!line.StartsWith("data: "))
+                { continue; }
+ 
+                var payload = line.Substring(6).Trim();
+                if (payload == "[DONE]" || string.IsNullOrWhiteSpace(payload))
+                { continue; }
+ 
+                try
+                {
+                    var evt = JObject.Parse(payload);
+                    var eventType = (string)evt["type"];
+ 
+                    if (eventType == "response.completed")
+                    {
+                        // The actual response object (with model, usage, etc.) is nested under "response"
+                        var inner = evt["response"] as JObject;
+                        if (inner != null)
+                        { return inner; }
+                    }
+                }
+                catch
+                {
+                    // Partial/malformed line (e.g. obfuscated delta payloads) — skip and keep scanning
+                    continue;
+                }
+            }
+ 
+            // No response.completed found — return empty object so downstream ?? defaults kick in
+            return new JObject();
+        }" />
+        <!-- 2. Extract token usage from the cached variable -->
+        <set-variable name="actualImages" value="@{            
+            return 1;
+        }" />
+        <!-- 3. Load existing counters from cache -->
+        <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
+        <!-- 4. Cost rates -->
+        <set-variable name="totalCostPerI" value="@{           
+            var model = (string)context.Variables["modelId"];
+            if (string.IsNullOrEmpty(model))
+            { return 0.0; }
+            if (model.IndexOf("GPTIMAGE15-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 32.0; }
+            return 32.0; // Default fallback
+        }" />
+        <!-- 5. Calculate cost -->
+        <set-variable name="totalCost" value="@{
+            double rate = (double)context.Variables["totalCostPerI"];
+			double images = (double)(int)context.Variables["actualImages"];
+			return rate * images;
+        }" />
+        <!-- 6. Calculate current cost -->
+        <set-variable name="currentCost" value="@{
+            double totalCost = (double)context.Variables["totalCost"];
+			double currentCost = totalCost;
+            return currentCost;
+        }" />
+        <!-- 7. Increment counters -->
+        <set-variable name="newCostTotal" value="@{
+            double previous = 0;
+            if (context.Variables.ContainsKey("storedCost")) {
+                previous = (double)context.Variables["storedCost"];
+            }
+            double current = (double)context.Variables["currentCost"];
+            return previous + current;
+        }" />
+        <!-- 8. Store updated counters back into cache (30 days) -->
+        <cache-store-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newCostTotal"])" duration="2592000" />
+    </outbound>
+    <!-- Handle exceptions and customize error responses  -->
+    <on-error>
+        <base />
+    </on-error>
+</policies>
 ---------------------------------------
+{
+    "prompt": "<prompt>",
+    "model": "<model-deployment>"
+	"size": "1024x1024",
+    "input_image": "<base64-encoded-image-data>",
+    "n": 1
+}
+---------------------------------------
+{ 
+    "created": 1698116662, 
+    "data": [ 
+        { 
+            "b64_json": "<base64-encoded-image-data>"
+        }
+    ]
+}
