@@ -2,7 +2,7 @@
 language: ["en"]
 tags: ["ai", "foundry", "apim", "azure", "policy", "control", "report", "budget"]
 license: "apache-2.0"
-version: v0.0.2
+version: v0.0.3
 ---
 
 # 💸 Azure AI Gateway Cost Mechanism
@@ -30,9 +30,10 @@ The repository includes assets to configure operations and reporting for Azure A
 
 It is designed to help AI administrators:
 
-- set **cost budgets**, per subscription (user /& product)
+- set cost per subscription though **cost budgets**
 - calculate and track **usage-based cost signals**
-- generate consolidated and aggregated **cost reports**
+- provision consolidated cost though **cost report**
+- provision individual user cost view though **cost widget**
 - support multiple **AI model modalities** and **providers**
 
 The mechanism supports workloads across:
@@ -58,14 +59,18 @@ This setup can also be used behind AI developer tools such as:
 - **GitHub Copilot desktop**
 - **OpenAI Codex desktop**
 - **Anthropic Claude Code desktop**
+- **AI Libraries**
 
 To support these clients, a **Front Door** layer is required in the middle.
 
 The Front Door is used to:
 
-- handle the **authorization header** flow
-- trim the `Bearer ` schema/prefix from the authorization value
-- forward the transformed value so **APIM** can accept it correctly
+- handle the **authentication header** flow
+- when header is `Authorization` trim the `Bearer ` schema/prefix from the authorization value and override the header name to x-apim-key (to support clients which sent Authorization: Bearer)
+- when header is `api-key` override the header name to x-apim-key (to support clients which sent api-key)
+
+`AIGatewayAITool`: Example aitool request flow and API testing through the gateway.
+![AIGatewayAITool](material/aitool.png)
 
 ### 📊 What it measures
 
@@ -81,28 +86,14 @@ The mechanism can count and report:
 - **Video**
 - - Seconds
 
-### ⚠️ Current limitation
+Current limitations:
 
 - The mechanism currently **does not count cached tokens**.
 - The mechanism currently **does not count other variations like image or video analysis**.
 - You have to manually map your deployment names with cost rations
 
-## 🧩 Supported modalities
-
-The included assets cover common AI request types such as:
-
-- **Text generation**
-- **Image generation and edit**
-- **Audio transcription**
-- **Video generation and remix**
-- **Embeddings**
-
-## 🔌 Supported providers
-
-Provider coverage currently includes:
-
-- **OpenAI** operations
-- **Anthropic** operations
+`AIGatewayPostman`: Example client request flow and API testing through the gateway.
+![AIGatewayPostman](material/postman.png)
 
 ## 🎯 Use cases
 
@@ -115,24 +106,48 @@ This repository is useful when you want to:
 - support **multi-model** and **multi-provider** AI gateways
 - connect AI coding tools through a gateway path backed by **Front Door** and **APIM**
 
-## 🚀 Coverage summary
+`AIGatewayPortal`: Azure portal view for gateway-related configuration and management.
+![AIGatewayPortal](material/portal.png)
 
-The cost mechanism is aligned with Azure AI Gateway scenarios where requests may vary by:
-
-- **Provider**: OpenAI, Anthropic
-- **Modality**: text, image, audio, video, embeddings
-- **Metric type**: input tokens, output tokens, seconds
-
-This allows a unified approach for cost monitoring across heterogeneous AI endpoints.
 
 ## 📈 Reporting focus
 
 The repository supports reporting scenarios for:
 
-- usage aggregation
+- consolidated usage
 - budget visibility
 - operation-level statistics
-- gateway cost analysis
+
+`AIGatewayReport`: Example reporting output for tracked usage and cost analysis.
+![AIGatewayReport](material/report.png)
+
+## 📈 Widget focus
+
+The repository supports widget scenarios for:
+
+- individual usage
+- budget visibility
+- operation-level statistics
+
+`AIGatewayWidget`: Example widget output for tracked usage and cost analysis.
+![AIGatewayReport](material/widget.png)
+
+## 🧩 Supported modalities
+
+The included assets cover common AI request types such as:
+
+- **Text generation**
+- **Image generation and edit**
+- **Audio transcription and tanslation**
+- **Video generation, remix and downlaod**
+- **Embeddings**
+
+## 🔌 Supported providers
+
+Provider coverage currently includes:
+
+- **OpenAI** operations
+- **Anthropic** operations
 
 ## ⚖️ Notes
 
@@ -145,15 +160,4 @@ The repository supports reporting scenarios for:
 
 ## ⚙️ Further thoughts
 
-- It would be more efficient if each call included built-in cost information. Alternatively, if exposing that through the APIs is not appropriate, it could be stored as internal AI Gateway metadata in a separate table.
-
-## 🖼️ Gateway walkthrough
-
-- `AIGatewayPostman`: Example client request flow and API testing through the gateway.
-![AIGatewayPostman](material/postman.png)
-
-- `AIGatewayPortal`: Azure portal view for gateway-related configuration and management.
-![AIGatewayPortal](material/portal.png)
-
-- `AIGatewayReport`: Example reporting output for tracked usage and cost analysis.
-![AIGatewayReport](material/report.png)
+It would be more efficient if each call included built-in cost information. Alternatively, if exposing that through the APIs is not appropriate, it could be stored as internal AI Gateway metadata in a separate table.

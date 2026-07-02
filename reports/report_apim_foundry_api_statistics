@@ -16,16 +16,15 @@ let costCorr = customMetrics
     | where timestamp > startofmonth(now())
     | where name == "Cost Correlation"
     | extend
-        requestId     = tostring(customDimensions["Request ID"]),
-        statusCode     = tostring(customDimensions["Status Code"]),
+        requestId    = tostring(customDimensions["Request ID"]),
         modelId      = tostring(customDimensions["Model ID"]),
+        statusCode   = tostring(customDimensions["Status Code"]),
         inputTokens  = toint(customDimensions["Input Tokens"]),
         outputTokens = toint(customDimensions["Output Tokens"]),
         cost         = todouble(customDimensions["Cost"])
-    | project modelId, inputTokens, outputTokens, cost, requestId, statusCode;
+    | project modelId, statusCode, inputTokens, outputTokens, cost, requestId;
 requestCorr
 | join kind=inner costCorr on requestId
-| where userId <> "" and productId <> ""
 | summarize
     InputTokens  = sum(inputTokens),
     OutputTokens = sum(outputTokens),
@@ -34,4 +33,4 @@ requestCorr
     by userEmail, productName, subscriptionName, apiId, modelId, statusCode
 | extend QuotaCost = 100
 | extend RatioCost = (Cost / QuotaCost) * 100
-| project userEmail, productName, subscriptionName, apiId, statusCode, modelId, InputTokens, OutputTokens, Cost, QuotaCost, RatioCost;
+| project userEmail, productName, subscriptionName, apiId, modelId, statusCode, InputTokens, OutputTokens, Cost, QuotaCost, RatioCost;
