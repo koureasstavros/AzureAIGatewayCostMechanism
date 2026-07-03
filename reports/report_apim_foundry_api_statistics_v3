@@ -10,7 +10,8 @@ let requestCorr = customMetrics
         subscriptionName = tostring(customDimensions["Subscription Name"]),
         apiId            = tostring(customDimensions["API ID"]),
         operationId      = tostring(customDimensions["Operation ID"])
-    | project userId, userEmail, productId, productName, subscriptionId, subscriptionName, apiId, operationId;
+    | project userId, userEmail, productId, productName, subscriptionId, subscriptionName, apiId, operationId
+    | distinct userId, userEmail, productId, productName, subscriptionId, subscriptionName, apiId, operationId;
 let costCorr = customMetrics
     | where timestamp > startofmonth(now())
     | where name == "Cost Correlation"
