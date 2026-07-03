@@ -31,6 +31,7 @@ const Editor = () => (
     <div className="form-group">
       <InputField valueKey="statisticsApiUrl" title="Statistics API URL" />
       <InputField valueKey="subscriptionKeyHeader" title="Subscription key header name" />
+      <InputField valueKey="contributorGroupName" title="Contributor group name" />
     </div>
   </fieldset>
 )

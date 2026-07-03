@@ -1,6 +1,7 @@
 export type Values = {
   statisticsApiUrl: string
   subscriptionKeyHeader: string
+  contributorGroupName: string
 }
 
 export const valuesDefault: Readonly<Values> = Object.freeze({
@@ -9,4 +10,6 @@ export const valuesDefault: Readonly<Values> = Object.freeze({
   statisticsApiUrl: "https://YOUR-APIM-GATEWAY.azure-api.net/statistics",
   // Header name your /statistics API expects the subscription key in.
   subscriptionKeyHeader: "Ocp-Apim-Subscription-Key",
+  // Only users matching this APIM group will see the extra aggregate tab.
+  contributorGroupName: "contributors",
 })

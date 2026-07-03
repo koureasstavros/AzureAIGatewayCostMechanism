@@ -2,7 +2,7 @@
 language: ["en"]
 tags: ["ai", "foundry", "apim", "azure", "policy", "control", "report", "budget"]
 license: "apache-2.0"
-version: v0.0.6
+version: v0.0.7
 ---
 
 # 💸 Azure AI Gateway Cost Mechanism
@@ -118,23 +118,29 @@ This repository is useful when you want to:
 
 The repository supports reporting scenarios for:
 
-- consolidated usage
-- budget visibility
+- personal / consolidated usage
+- subscriptions / budget visibility
 - operation-level statistics
 
-`AIGatewayReport`: Example reporting output for tracked usage and cost analysis.
-![AIGatewayReport](material/report.png)
+`AIGatewayReportDeveloper`: Example developer report for output for personal tracked usage and cost analysis.
+![AIGatewayReportDeveloper](material/report_developer.png)
+
+`AIGatewayReportContributor`: Example contibutor report for consolidated output for tracked usage and cost analysis.
+![AIGatewayReportContributor](material/report_contributor.png) 
 
 ## 📈 Widget focus
 
 The repository supports widget scenarios for:
 
-- individual usage
-- budget visibility
+- personal / consolidated usage
+- subscriptions / budget visibility
 - operation-level statistics
 
-`AIGatewayWidget`: Example widget output for tracked usage and cost analysis.
-![AIGatewayReport](material/widget.png)
+`AIGatewayWidgetDeveloper`: Example developer widget for personal tracked usage and cost analysis.
+![AIGatewayWidgetDeveloper](material/widget_developer.png)
+
+`AIGatewayWidgetContributor`: Example contributor widget for consolidated tracked usage and cost analysis.
+![AIGatewayWidgetContributor](material/widget_contributor.png)
 
 ## 🧩 Supported modalities
 

@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useState} from "react"
+import {useCallback, useEffect, useMemo, useState} from "react"
 import {useDeveloperPortalRequest, useExternalRequest, useRequest, useSecrets, useValues} from "../hooks"
 
 type SubscriptionProperties = {
@@ -22,6 +22,11 @@ type SubscriptionEntity = {
   properties?: SubscriptionProperties
 }
 
+type SubscriptionSecrets = {
+  primaryKey?: string
+  secondaryKey?: string
+}
+
 type ProductProperties = {
   displayName?: string
   title?: string
@@ -41,14 +46,61 @@ type UsageStats = {
 }
 
 type UsageItem = {
-  name: string
+  subscriptionName: string
   subscriptionId: string
   productName?: string
   state?: string
-  scope?: string
+  subscriptionScope?: string
   debug?: string[]
   stats?: UsageStats
   error?: string
+}
+
+type GroupEntity = {
+  id: string
+  name?: string
+  properties?: {
+    displayName?: string
+    builtIn?: boolean
+    type?: string
+  }
+}
+
+type GroupUserEntity = {
+  id: string
+  name?: string
+  properties?: {
+    firstName?: string
+    lastName?: string
+    email?: string
+  }
+}
+
+type AggregateStatsItem = {
+  userName?: string
+  subscriptionName: string
+  subscriptionId: string
+  productName?: string
+  state?: string
+  consumed?: number
+  quota?: number
+  remaining?: number
+  pct?: number
+  debug?: string[]
+  error?: string
+}
+
+type TabKey = "mine" | "all"
+
+type SortableColumn = "userName" | "productName" | "subscriptionName" | "state" | "consumed" | "quota" | "remaining" | "pct"
+
+type SortDirection = "asc" | "desc"
+
+type AggregateSummary = {
+  totalCost: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalTokens: number
 }
 
 function prettifyName(value: string): string {
@@ -63,6 +115,17 @@ function getScopeSegment(scope: string | undefined): string | undefined {
   if (!scope) return undefined
   const parts = scope.split("/").filter(Boolean)
   return parts.at(-1)
+}
+
+function getProductResourcePath(scope: string | undefined): string | undefined {
+  const normalized = normalizeManagementPath(scope ?? "")
+  if (!normalized || !isProductScope(normalized)) return undefined
+
+  const marker = "/products/"
+  const productIndex = normalized.toLowerCase().indexOf(marker)
+  if (productIndex === -1) return undefined
+
+  return normalized.slice(productIndex)
 }
 
 function normalizeManagementPath(path: string): string {
@@ -104,6 +167,19 @@ function getSubscriptionKey(sub: SubscriptionEntity): string | undefined {
     ?? sub.properties?.secondaryKey
 }
 
+async function getSubscriptionKeyForAdminView(sub: SubscriptionEntity, request: ReturnType<typeof useRequest>): Promise<string | undefined> {
+  const existingKey = getSubscriptionKey(sub)
+  if (existingKey) return existingKey
+
+  const secretsRes = await request(`/subscriptions/${sub.name}/listSecrets`, "POST")
+  if (!secretsRes.ok) {
+    throw new Error(`Could not load subscription secrets (${secretsRes.status})`)
+  }
+
+  const secrets: SubscriptionSecrets = await secretsRes.json()
+  return secrets.primaryKey ?? secrets.secondaryKey
+}
+
 function getSubscriptionScope(sub: SubscriptionEntity): string | undefined {
   return sub.scope ?? sub.properties?.scope
 }
@@ -116,6 +192,77 @@ function getSubscriptionDisplayName(sub: SubscriptionEntity): string | undefined
   return sub.displayName ?? sub.properties?.displayName ?? sub.properties?.name
 }
 
+function getUserResourceName(value: string | undefined): string {
+  if (!value) return ""
+  return value.split("/").filter(Boolean).at(-1) ?? value
+}
+
+function normalizeText(value: string | undefined): string {
+  return (value ?? "").trim().toLowerCase()
+}
+
+function getGroupName(group: GroupEntity): string | undefined {
+  return group.properties?.displayName ?? group.name
+}
+
+function isCurrentUserInGroup(users: GroupUserEntity[], currentUserId: string): boolean {
+  const expected = normalizeText(currentUserId)
+  if (!expected) return false
+
+  return users.some(user => {
+    const nameMatch = normalizeText(user.name) === expected
+    const idSegment = user.id.split("/").filter(Boolean).at(-1)
+    const idMatch = normalizeText(idSegment) === expected
+    return nameMatch || idMatch
+  })
+}
+
+function formatNumber(value: number | undefined, fractionDigits = 0): string {
+  return (value ?? 0).toLocaleString(undefined, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })
+}
+
+function formatCurrency(value: number | undefined): string {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value ?? 0)
+}
+
+function getGroupUserDisplayName(user: GroupUserEntity): string {
+  const firstName = user.properties?.firstName?.trim()
+  const lastName = user.properties?.lastName?.trim()
+  const fullName = [firstName, lastName].filter(Boolean).join(" ")
+
+  return fullName || user.properties?.email || user.name || user.id
+}
+
+function summarizeUsageStats(items: AggregateStatsItem[]): AggregateSummary {
+  return items.reduce<AggregateSummary>((summary, item) => ({
+    totalCost: summary.totalCost + (item.consumed ?? 0),
+    totalInputTokens: summary.totalInputTokens + (item.quota ?? 0),
+    totalOutputTokens: summary.totalOutputTokens + (item.remaining ?? 0),
+    totalTokens: summary.totalTokens + (item.pct ?? 0),
+  }), {
+    totalCost: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalTokens: 0,
+  })
+}
+
+function compareNullableStrings(a: string | undefined, b: string | undefined): number {
+  return (a ?? "").localeCompare(b ?? "", undefined, {sensitivity: "base"})
+}
+
+function compareNullableNumbers(a: number | undefined, b: number | undefined): number {
+  return (a ?? 0) - (b ?? 0)
+}
+
 const App = () => {
   const values = useValues()
   const {userId} = useSecrets()
@@ -124,12 +271,21 @@ const App = () => {
   const externalRequest = useExternalRequest()
 
   const [items, setItems] = useState<UsageItem[] | undefined>()
+  const [allItems, setAllItems] = useState<AggregateStatsItem[] | undefined>()
   const [loadError, setLoadError] = useState<string | undefined>()
+  const [allLoadError, setAllLoadError] = useState<string | undefined>()
+  const [isContributorUser, setIsContributorUser] = useState(false)
+  const [contributorDebug, setContributorDebug] = useState<string[]>([])
+  const [activeTab, setActiveTab] = useState<TabKey>("mine")
+  const [sortColumn, setSortColumn] = useState<SortableColumn>("userName")
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
   const [refreshToken, setRefreshToken] = useState(0)
 
   const refresh = useCallback(() => {
     setItems(undefined)
+    setAllItems(undefined)
     setLoadError(undefined)
+    setAllLoadError(undefined)
     setRefreshToken(value => value + 1)
   }, [])
 
@@ -140,9 +296,39 @@ const App = () => {
 
     async function load() {
       try {
+        const groupsRes = await request("/groups")
+        const groupsBody = groupsRes.ok ? await groupsRes.json() : {value: []}
+        const groups: GroupEntity[] = groupsBody.value ?? []
+        const contributorGroup = groups.find(group => normalizeText(getGroupName(group)) === normalizeText(values.contributorGroupName))
+
+        let contributorUser = false
+        let groupUsersStatus = 0
+        let groupUsers: GroupUserEntity[] = []
+
+        if (contributorGroup?.name) {
+          const groupUsersRes = await request(`/groups/${contributorGroup.name}/users`, "GET")
+          groupUsersStatus = groupUsersRes.status
+          const groupUsersBody = groupUsersRes.ok ? await groupUsersRes.json() : {value: []}
+          groupUsers = groupUsersBody.value ?? []
+          contributorUser = isCurrentUserInGroup(groupUsers, userId ?? "")
+        }
+
+        if (!cancelled) {
+          setIsContributorUser(contributorUser)
+          setContributorDebug([
+            `userId=${userId}`,
+            `expectedContributorGroup=${values.contributorGroupName}`,
+            `groupsStatus=${groupsRes.status}`,
+            `groupsReturned=${groups.map(group => `${getGroupName(group) ?? group.id} (${group.name ?? "no-name"})`).join(", ") || "none"}`,
+            `matchedGroupId=${contributorGroup?.name ?? "none"}`,
+            `groupUsersStatus=${groupUsersStatus || "not-called"}`,
+            `groupUsersReturned=${groupUsers.map(user => user.name ?? user.id).join(", ") || "none"}`,
+            `isContributorUser=${contributorUser ? "yes" : "no"}`,
+          ])
+          setActiveTab(current => (current === "all" && !contributorUser ? "mine" : current))
+        }
+
         // 1. List this user's subscriptions.
-        //    In the user context this payload includes primaryKey/secondaryKey,
-        //    unlike the admin ARM-shaped response.
         const subsRes = await developerPortalRequest(`/developer/users/${userId}/subscriptions?$top=50&$skip=0&api-version=2022-04-01-preview`)
         if (!subsRes.ok) throw new Error(`Could not load subscriptions (${subsRes.status})`)
         const subsBody = await subsRes.json()
@@ -174,14 +360,12 @@ const App = () => {
 
         // 2. For each subscription, use the key from the subscriptions payload,
         //    then call your /statistics API with that key.
-        const results = await Promise.all(
+        const usageItems = await Promise.all(
           subs.map(async (sub): Promise<UsageItem> => {
             const normalizedScope = normalizeManagementPath(getSubscriptionScope(sub) ?? "")
             const productName = normalizedScope ? productNameByScope.get(normalizedScope) : undefined
             const scopeName = getScopeSegment(normalizedScope)
-            const name = getSubscriptionDisplayName(sub)
-              ?? productName
-              ?? (scopeName ? prettifyName(scopeName) : undefined)
+            const subscriptionName = getSubscriptionDisplayName(sub)
               ?? sub.name
             const debug: string[] = []
 
@@ -204,11 +388,11 @@ const App = () => {
               debug.push(`statisticsResponse=${JSON.stringify(stats)}`)
 
               return {
-                name,
+                subscriptionName,
                 subscriptionId: sub.name,
                 productName,
                 state: getSubscriptionState(sub),
-                scope: normalizedScope,
+                subscriptionScope: normalizedScope,
                 stats,
                 debug,
               }
@@ -216,11 +400,11 @@ const App = () => {
               debug.push(`error=${formatError(err)}`)
 
               return {
-                name,
+                subscriptionName,
                 subscriptionId: sub.name,
                 productName,
                 state: getSubscriptionState(sub),
-                scope: normalizedScope,
+                subscriptionScope: normalizedScope,
                 debug,
                 error: formatError(err),
               }
@@ -228,7 +412,119 @@ const App = () => {
           }),
         )
 
-        if (!cancelled) setItems(results)
+        if (!cancelled) setItems(usageItems)
+
+        if (contributorUser && contributorGroup?.name) {
+          try {
+            const aggregateResults = await Promise.all(
+              groupUsers.map(async (groupUser): Promise<AggregateStatsItem[]> => {
+                const currentGroupUserId = getUserResourceName(groupUser.name ?? groupUser.id)
+                const currentGroupUserDisplayName = getGroupUserDisplayName(groupUser)
+
+                try {
+                  const userSubsRes = await request(`/users/${currentGroupUserId}/subscriptions`)
+                  if (!userSubsRes.ok) throw new Error(`Could not load subscriptions for ${currentGroupUserId} (${userSubsRes.status})`)
+
+                  const userSubsBody = await userSubsRes.json()
+                  const userSubs: SubscriptionEntity[] = userSubsBody.value ?? []
+
+                  return Promise.all(userSubs.map(async (sub): Promise<AggregateStatsItem> => {
+                    const normalizedScope = normalizeManagementPath(getSubscriptionScope(sub) ?? "")
+                    const productResourcePath = getProductResourcePath(normalizedScope)
+                    let productName = productResourcePath ? productNameByScope.get(productResourcePath) : undefined
+
+                    if (!productName && productResourcePath) {
+                      try {
+                        const productRes = await request(productResourcePath)
+                        if (productRes.ok) {
+                          const product: ProductEntity = await productRes.json()
+                          productName = product.properties?.displayName ?? product.properties?.title ?? product.name
+                          if (productName) {
+                            productNameByScope.set(productResourcePath, productName)
+                          }
+                        }
+                      } catch {
+                        // Ignore and keep fallback values.
+                      }
+                    }
+
+                    const scopeName = getScopeSegment(normalizedScope)
+                    const subscriptionName = getSubscriptionDisplayName(sub)
+                      ?? sub.name
+                    const debug: string[] = [
+                      `groupUser=${currentGroupUserId}`,
+                      `groupUserDisplayName=${currentGroupUserDisplayName}`,
+                      `subscriptionId=${sub.name}`,
+                      `subscriptionScope=${normalizedScope || "none"}`,
+                      `productResourcePath=${productResourcePath || "none"}`,
+                      `productName=${productName || "none"}`,
+                      `statisticsApiUrl=${values.statisticsApiUrl}`,
+                      `subscriptionKeyHeader=${values.subscriptionKeyHeader}`,
+                    ]
+
+                    try {
+                      const key = await getSubscriptionKeyForAdminView(sub, request)
+                      if (!key) throw new Error("No subscription key available")
+                      debug.push("subscriptionKeyFound=yes")
+
+                      const statsRes = await externalRequest(values.statisticsApiUrl, {
+                        [values.subscriptionKeyHeader]: key,
+                      })
+                      debug.push(`statisticsStatus=${statsRes.status}`)
+                      if (!statsRes.ok) throw new Error(`Statistics request failed (${statsRes.status})`)
+                      const stats: UsageStats = await statsRes.json()
+                      debug.push(`statisticsResponse=${JSON.stringify(stats)}`)
+
+                      return {
+                        userName: currentGroupUserDisplayName,
+                        subscriptionName,
+                        subscriptionId: sub.name,
+                        productName,
+                        state: getSubscriptionState(sub),
+                        consumed: stats.consumed,
+                        quota: stats.quota,
+                        remaining: stats.remaining,
+                        pct: stats.pct,
+                        debug,
+                      }
+                    } catch (err) {
+                      debug.push(`error=${formatError(err)}`)
+
+                      return {
+                        userName: currentGroupUserDisplayName,
+                        subscriptionName,
+                        subscriptionId: sub.name,
+                        productName,
+                        state: getSubscriptionState(sub),
+                        debug,
+                        error: formatError(err),
+                      }
+                    }
+                  }))
+                } catch (err) {
+                  return [{
+                    userName: currentGroupUserDisplayName,
+                    subscriptionName: currentGroupUserDisplayName,
+                    subscriptionId: currentGroupUserId,
+                    debug: [`groupUser=${currentGroupUserId}`, `groupUserDisplayName=${currentGroupUserDisplayName}`],
+                    error: formatError(err),
+                  }]
+                }
+              }),
+            )
+
+            if (!cancelled) {
+              setAllItems(aggregateResults.flat())
+            }
+          } catch (err) {
+            if (!cancelled) {
+              setAllLoadError(formatError(err))
+            }
+          }
+        } else if (!cancelled) {
+          setAllItems(undefined)
+          setAllLoadError(undefined)
+        }
       } catch (err) {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err))
       }
@@ -238,32 +534,97 @@ const App = () => {
     return () => {
       cancelled = true
     }
-  }, [userId, request, developerPortalRequest, externalRequest, values.statisticsApiUrl, values.subscriptionKeyHeader, refreshToken])
+  }, [userId, request, developerPortalRequest, externalRequest, values.statisticsApiUrl, values.subscriptionKeyHeader, values.contributorGroupName, refreshToken])
 
-  const content = (() => {
+  const aggregateSummary = useMemo<AggregateSummary | undefined>(() => {
+    if (!allItems?.length) return undefined
+
+    return summarizeUsageStats(allItems)
+  }, [allItems])
+
+  const sortedUsageItems = useMemo(() => {
+    if (!items) return undefined
+
+    return [...items].sort((left, right) => {
+      const leftPct = left.stats?.pct ?? -1
+      const rightPct = right.stats?.pct ?? -1
+      return rightPct - leftPct
+    })
+  }, [items])
+
+  const sortedAllItems = useMemo(() => {
+    if (!allItems) return undefined
+
+    const sortedItems = [...allItems]
+    sortedItems.sort((left, right) => {
+      const comparison = (() => {
+        switch (sortColumn) {
+          case "userName":
+            return compareNullableStrings(left.userName, right.userName)
+          case "productName":
+            return compareNullableStrings(left.productName, right.productName)
+          case "subscriptionName":
+            return compareNullableStrings(left.subscriptionName, right.subscriptionName)
+          case "state":
+            return compareNullableStrings(left.state, right.state)
+          case "consumed":
+            return compareNullableNumbers(left.consumed, right.consumed)
+          case "quota":
+            return compareNullableNumbers(left.quota, right.quota)
+          case "remaining":
+            return compareNullableNumbers(left.remaining, right.remaining)
+          case "pct":
+            return compareNullableNumbers(left.pct, right.pct)
+          default:
+            return 0
+        }
+      })()
+
+      return sortDirection === "asc" ? comparison : -comparison
+    })
+
+    return sortedItems
+  }, [allItems, sortColumn, sortDirection])
+
+  const toggleSort = useCallback((column: SortableColumn) => {
+    setSortColumn(currentColumn => {
+      if (currentColumn === column) {
+        setSortDirection(currentDirection => currentDirection === "asc" ? "desc" : "asc")
+        return currentColumn
+      }
+
+      setSortDirection("asc")
+      return column
+    })
+  }, [])
+
+  const getSortIndicator = useCallback((column: SortableColumn) => {
+    if (sortColumn !== column) return "↕"
+    return sortDirection === "asc" ? "↑" : "↓"
+  }, [sortColumn, sortDirection])
+
+  const mineContent = (() => {
     if (loadError) {
       return <div className="usage-error">Could not load your usage: {loadError}</div>
     }
 
-    if (!items) {
+    if (!sortedUsageItems) {
       return <div className="usage-loading">Loading your usage…</div>
     }
 
-    if (items.length === 0) {
+    if (sortedUsageItems.length === 0) {
       return <div className="usage-loading">No active subscriptions found.</div>
     }
 
     return (
       <>
-        {items.map(item => (
+        {sortedUsageItems.map(item => (
           <div className="usage-card" key={item.subscriptionId}>
             <div className="usage-card-header">
-              <h4>{item.name}</h4>
+              <h4>{item.subscriptionName}</h4>
               {item.state && item.state !== "active" ? <span className="usage-badge">{item.state}</span> : null}
             </div>
-            {item.name !== item.subscriptionId ? <div className="usage-subtitle">Subscription ID: {item.subscriptionId}</div> : null}
-            {item.productName && item.productName !== item.name ? <div className="usage-subtitle">Product: {item.productName}</div> : null}
-            {item.scope ? <div className="usage-subtitle">{item.scope}</div> : null}
+            {item.productName ? <div className="usage-subtitle">Product Name: {item.productName}</div> : null}
             {item.error || !item.stats ? (
               <>
                 <div className="usage-error">Could not load usage: {item.error}</div>
@@ -304,16 +665,135 @@ const App = () => {
     )
   })()
 
+  const allContent = (() => {
+    if (!isContributorUser) {
+      return null
+    }
+
+    if (allLoadError) {
+      return <div className="usage-error">Could not load all statistics: {allLoadError}</div>
+    }
+
+    if (!sortedAllItems) {
+      return <div className="usage-loading">Loading all statistics…</div>
+    }
+
+    if (sortedAllItems.length === 0) {
+      return <div className="usage-loading">No aggregate statistics found.</div>
+    }
+
+    return (
+      <div className="usage-all-stats">
+        {aggregateSummary ? (
+          <div className="usage-summary-grid">
+            <div className="usage-summary-card">
+              <span className="usage-summary-label">Total consumed</span>
+              <strong>{formatNumber(aggregateSummary.totalCost, 2)}</strong>
+            </div>
+            <div className="usage-summary-card">
+              <span className="usage-summary-label">Total quota</span>
+              <strong>{formatNumber(aggregateSummary.totalInputTokens, 2)}</strong>
+            </div>
+            <div className="usage-summary-card">
+              <span className="usage-summary-label">Total remaining</span>
+              <strong>{formatNumber(aggregateSummary.totalOutputTokens, 2)}</strong>
+            </div>
+            <div className="usage-summary-card">
+              <span className="usage-summary-label">Average usage %</span>
+              <strong>{formatNumber(sortedAllItems.reduce((sum, item) => sum + (item.pct ?? 0), 0) / sortedAllItems.length, 1)}%</strong>
+            </div>
+          </div>
+        ) : null}
+        <div className="usage-table-wrapper">
+          <table className="usage-table">
+            <thead>
+              <tr>
+                <th><button className="usage-sort-button" onClick={() => toggleSort("userName")} type="button">User Name {getSortIndicator("userName")}</button></th>
+                <th><button className="usage-sort-button" onClick={() => toggleSort("productName")} type="button">Product Name {getSortIndicator("productName")}</button></th>
+                <th><button className="usage-sort-button" onClick={() => toggleSort("subscriptionName")} type="button">Subscription Name {getSortIndicator("subscriptionName")}</button></th>
+                <th><button className="usage-sort-button" onClick={() => toggleSort("state")} type="button">State {getSortIndicator("state")}</button></th>
+                <th><button className="usage-sort-button" onClick={() => toggleSort("consumed")} type="button">Consumed {getSortIndicator("consumed")}</button></th>
+                <th><button className="usage-sort-button" onClick={() => toggleSort("quota")} type="button">Quota {getSortIndicator("quota")}</button></th>
+                <th><button className="usage-sort-button" onClick={() => toggleSort("remaining")} type="button">Remaining {getSortIndicator("remaining")}</button></th>
+                <th><button className="usage-sort-button" onClick={() => toggleSort("pct")} type="button">Usage {getSortIndicator("pct")}</button></th>
+                <th>Debug</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedAllItems.map((item, index) => (
+                <tr key={`${item.subscriptionId}-${index}`}>
+                  <td>{item.userName ?? "-"}</td>
+                  <td>{item.productName ?? "-"}</td>
+                  <td>{item.subscriptionName}</td>
+                  <td>{item.state ?? "-"}</td>
+                  <td>{formatNumber(item.consumed, 2)}</td>
+                  <td>{formatNumber(item.quota, 2)}</td>
+                  <td>{formatNumber(item.remaining, 2)}</td>
+                  <td>{formatNumber(item.pct, 1)}%</td>
+                  <td>
+                    {item.error || item.debug?.length ? (
+                      <details className="usage-debug usage-debug-inline">
+                        <summary>{item.error ? "Show error" : "Show debug"}</summary>
+                        {item.error ? <div className="usage-error">{item.error}</div> : null}
+                        {item.debug?.length ? (
+                          <div className="usage-debug-lines">
+                            {item.debug.map(line => <div key={line}>{line}</div>)}
+                          </div>
+                        ) : null}
+                      </details>
+                    ) : "-"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  })()
+
   return (
     <div className="usage-widget-root">
       <div className="usage-widget-header">
         <div>
           <h3 className="usage-widget-title">API usage</h3>
-          <div className="usage-widget-caption">Your current subscription usage and quota status.</div>
+          <div className="usage-widget-caption">
+            {activeTab === "mine"
+              ? "Your current subscription usage and quota status."
+              : "Aggregate statistics for all users, products, and subscriptions."}
+          </div>
         </div>
-        <button className="usage-refresh-button" onClick={refresh} type="button">Refresh</button>
+        <div className="usage-widget-actions">
+          {isContributorUser ? (
+            <div className="usage-tabs" role="tablist" aria-label="Usage views">
+              <button
+                className={`usage-tab ${activeTab === "mine" ? "active" : ""}`}
+                onClick={() => setActiveTab("mine")}
+                type="button"
+              >
+                My usage
+              </button>
+              <button
+                className={`usage-tab ${activeTab === "all" ? "active" : ""}`}
+                onClick={() => setActiveTab("all")}
+                type="button"
+              >
+                All statistics
+              </button>
+            </div>
+          ) : null}
+          <button className="usage-refresh-button" onClick={refresh} type="button">Refresh</button>
+        </div>
       </div>
-      {content}
+      {contributorDebug.length ? (
+        <details className="usage-debug usage-debug-block">
+          <summary>Contributor tab debug</summary>
+          <ul>
+            {contributorDebug.map(line => <li key={line}>{line}</li>)}
+          </ul>
+        </details>
+      ) : null}
+      {activeTab === "all" && isContributorUser ? allContent : mineContent}
     </div>
   )
 }

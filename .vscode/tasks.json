@@ -1,0 +1,21 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run admin cost report app",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"start",
+				"--",
+				"--host"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/webapp/admin-cost-report-app"
+			},
+			"isBackground": true,
+			"group": "build"
+		}
+	]
+}
