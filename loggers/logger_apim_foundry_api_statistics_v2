@@ -1,3 +1,9 @@
+Add additional lines into the customMetrics table like this one with name Request Correlation and Cost Correlation
+You can have up to 10 dimensions and 50K values per dimension
+This contains Request ID whih is unique in each request and can fullfill the 50K values
+
+----------------------------------------------------------------------------------------------
+
 <emit-metric name="Request Correlation" value="1">
     <dimension name="Request ID" value="@(context.RequestId.ToString())" />
     <dimension name="User ID" value="@(context.User?.Id)" />

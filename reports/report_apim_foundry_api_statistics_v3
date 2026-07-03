@@ -1,0 +1,37 @@
+let requestCorr = customMetrics
+    | where timestamp > startofmonth(now())
+    | where name == "Request Correlation"
+    | extend
+        userId           = tostring(customDimensions["User ID"]),
+        userEmail        = tostring(customDimensions["User Email"]),
+        productId        = tostring(customDimensions["Product ID"]),
+        productName      = tostring(customDimensions["Product Name"]),
+        subscriptionId   = tostring(customDimensions["Subscription ID"]),
+        subscriptionName = tostring(customDimensions["Subscription Name"]),
+        apiId            = tostring(customDimensions["API ID"]),
+        operationId      = tostring(customDimensions["Operation ID"])
+    | project userId, userEmail, productId, productName, subscriptionId, subscriptionName, apiId, operationId;
+let costCorr = customMetrics
+    | where timestamp > startofmonth(now())
+    | where name == "Cost Correlation"
+    | extend
+        subscriptionId  = tostring(customDimensions["Subscription ID"]),
+        apiId           = tostring(customDimensions["API ID"]),
+        operationId     = tostring(customDimensions["Operation ID"]),
+        modelId         = tostring(customDimensions["Model ID"]),
+        statusCode      = tostring(customDimensions["Status Code"]),
+        inputTokens     = toint(customDimensions["Input Tokens"]),
+        outputTokens    = toint(customDimensions["Output Tokens"]),
+        cost            = todouble(customDimensions["Cost"])
+    | project subscriptionId, apiId, operationId, modelId, statusCode, inputTokens, outputTokens, cost;
+requestCorr
+| join kind=inner costCorr on subscriptionId, apiId, operationId
+| summarize
+    InputTokens  = sum(inputTokens),
+    OutputTokens = sum(outputTokens),
+    TotalTokens  = sum(inputTokens + outputTokens),
+    Cost         = sum(cost)
+    by userEmail, productName, subscriptionName, apiId, modelId, statusCode
+| extend QuotaCost = 100
+| extend RatioCost = (Cost / QuotaCost) * 100
+| project userEmail, productName, subscriptionName, apiId, modelId, statusCode, InputTokens, OutputTokens, Cost, QuotaCost, RatioCost;
