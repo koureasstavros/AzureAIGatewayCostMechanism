@@ -26,18 +26,6 @@ OpenAI Text Completions
         }" />
 		<!-- Replace request body -->
         <set-body>@((string)context.Variables["requestBody"])</set-body>
-        <set-variable name="modelId" value="@{
-            string raw = (string)context.Variables["requestBody"];
-            if (string.IsNullOrWhiteSpace(raw))
-            { return null; }
-            try
-            {
-                var body = JObject.Parse(raw);
-                return body?["model"]?.Value<string>();
-            }
-            catch
-            { return null; }
-        }" />
         <!-- Calculate current year-month -->
         <set-variable name="yearMonth" value="@{
             return DateTime.UtcNow.ToString("yyyy-MM");
@@ -137,7 +125,7 @@ OpenAI Text Completions
         <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
         <!-- 4. Cost rates -->
         <set-variable name="inputCostPerM" value="@{
-            var model = (string)context.Variables["modelId"];
+            var model = (string)context.Variables["deploymentName"];
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
 			if (model.IndexOf("GPT54NANO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -151,7 +139,7 @@ OpenAI Text Completions
             return 5.0; // Default fallback
         }" />
         <set-variable name="outputCostPerM" value="@{
-            var model = (string)context.Variables["modelId"];
+            var model = (string)context.Variables["deploymentName"];
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
 			if (model.IndexOf("GPT54NANO-GS", StringComparison.OrdinalIgnoreCase) >= 0)

@@ -14,18 +14,6 @@ OpenAI Text Embeddings
         <set-variable name="apiVersionName" value="@(context.Request.Url.Query.GetValueOrDefault("api-version"))" />
         <rewrite-uri template="@($"/openai/deployments/{context.Variables["deploymentName"]}/embeddings?api-version={context.Variables["apiVersionName"]}")" copy-unmatched-params="false" />
 		<set-variable name="requestBody" value="@(context.Request.Body.As<string>(preserveContent: true))" />
-        <set-variable name="modelId" value="@{
-            string raw = (string)context.Variables["requestBody"];
-            if (string.IsNullOrWhiteSpace(raw))
-            { return null; }
-            try
-            {
-                var body = JObject.Parse(raw);
-                return body?["model"]?.Value<string>();
-            }
-            catch
-            { return null; }
-        }" />
         <!-- Calculate current year-month -->
         <set-variable name="yearMonth" value="@{
             return DateTime.UtcNow.ToString("yyyy-MM");
@@ -121,7 +109,7 @@ OpenAI Text Embeddings
         <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
         <!-- 4. Cost rates -->
         <set-variable name="promptCostPerM" value="@{
-            var model = (string)context.Variables["modelId"];
+            var model = (string)context.Variables["deploymentName"];
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
 			if (model.IndexOf("ADA2-GS", StringComparison.OrdinalIgnoreCase) >= 0)

@@ -2,7 +2,7 @@
 language: ["en"]
 tags: ["ai", "foundry", "apim", "azure", "policy", "control", "report", "budget"]
 license: "apache-2.0"
-version: v0.0.3
+version: v0.0.4
 ---
 
 # 💸 Azure AI Gateway Cost Mechanism
@@ -61,6 +61,9 @@ This setup can also be used behind AI developer tools such as:
 - **Anthropic Claude Code desktop**
 - **AI Libraries**
 
+`AIGatewayAITool`: Example AI Tool request flow and API testing through the gateway.
+![AIGatewayAITool](material/aitool.png)
+
 To support these clients, a **Front Door** layer is required in the middle.
 
 The Front Door is used to:
@@ -69,8 +72,9 @@ The Front Door is used to:
 - when header is `Authorization` trim the `Bearer ` schema/prefix from the authorization value and override the header name to x-apim-key (to support clients which sent Authorization: Bearer)
 - when header is `api-key` override the header name to x-apim-key (to support clients which sent api-key)
 
-`AIGatewayAITool`: Example aitool request flow and API testing through the gateway.
-![AIGatewayAITool](material/aitool.png)
+`AIGatewayFrontDoor`: Example Front Door rule into ruleset for the gateway.
+![AIGatewayFrontDoor](material/frontdoor.png)
+
 
 ### 📊 What it measures
 

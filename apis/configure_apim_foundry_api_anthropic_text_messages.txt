@@ -8,7 +8,7 @@ Anthropic Text Messages
     <inbound>
         <base />
         <set-variable name="apiVersionName" value="@(context.Request.Url.Query.GetValueOrDefault("api-version"))" />
-        <rewrite-uri template="@($"/openai/responses?api-version={context.Variables["apiVersionName"]}")" copy-unmatched-params="false" />
+        <rewrite-uri template="@($"/anthropic/messages?api-version={context.Variables["apiVersionName"]}")" copy-unmatched-params="false" />
 		<set-variable name="requestBody" value="@(context.Request.Body.As<string>(preserveContent: true))" />
         <set-variable name="modelId" value="@{
             string raw = (string)context.Variables["requestBody"];

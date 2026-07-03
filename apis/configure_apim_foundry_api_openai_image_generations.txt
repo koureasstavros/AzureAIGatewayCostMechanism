@@ -20,18 +20,6 @@ OpenAI Image Generations
 		}" />
 		<!-- Replace request body -->
 		<set-body>@((string)context.Variables["requestBody"])</set-body>
-        <set-variable name="modelId" value="@{
-            string raw = (string)context.Variables["requestBody"];
-            if (string.IsNullOrWhiteSpace(raw))
-            { return null; }
-            try
-            {
-                var body = JObject.Parse(raw);
-                return body?["model"]?.Value<string>();
-            }
-            catch
-            { return null; }
-        }" />
     </inbound>
     <!-- Control if and how the requests are forwarded to services  -->
     <backend>
@@ -111,7 +99,7 @@ OpenAI Image Generations
         <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
         <!-- 4. Cost rates -->
         <set-variable name="totalCostPerI" value="@{           
-            var model = (string)context.Variables["modelId"];
+            var model = (string)context.Variables["deploymentName"];
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
             if (model.IndexOf("GPTIMAGE15-GS", StringComparison.OrdinalIgnoreCase) >= 0)
