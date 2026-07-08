@@ -16,25 +16,69 @@ OpenAI Audio V1 Transcriptions
     <inbound>
         <base />
 		<rewrite-uri template="/openai/v1/audio/transcriptions" copy-unmatched-params="false" />
-		<set-variable name="requestBody" value="@{
-			var body = context.Request.Body.As<JObject>(preserveContent: true);
-			body["response_format"] = "verbose_json";   // <-- overwrite here
-			return body.ToString();
+		<!-- 1. Extract boundary from Content-Type header -->
+		<set-variable name="boundary" value="@{
+			string contentType = context.Request.Headers.GetValueOrDefault("Content-Type", "");
+			var match = System.Text.RegularExpressions.Regex.Match(contentType, "boundary=(?:\"([^\"]+)\"|([^;]+))");
+			return match.Success ? (match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value.Trim()) : null;
 		}" />
-		<!-- Replace request body -->
-		<set-body>@((string)context.Variables["requestBody"])</set-body>
-        <set-variable name="modelId" value="@{
-            string raw = (string)context.Variables["requestBody"];
-            if (string.IsNullOrWhiteSpace(raw))
-            { return null; }
-            try
-            {
-                var body = JObject.Parse(raw);
-                return body?["model"]?.Value<string>();
-            }
-            catch
-            { return null; }
-        }" />
+		<!-- 2. Read raw multipart body as Latin-1 string (preserves binary bytes) -->
+		<set-variable name="rawBodyString" value="@{
+			byte[] bodyBytes = context.Request.Body.As<byte[]>(preserveContent: true);
+			return System.Text.Encoding.GetEncoding("ISO-8859-1").GetString(bodyBytes);
+		}" />
+		<!-- 3. Add or replace the response_format part -->
+		<set-variable name="requestBody" value="@{
+			string boundary = (string)context.Variables["boundary"];
+			string raw = (string)context.Variables["rawBodyString"];
+
+			if (string.IsNullOrEmpty(boundary))
+			{ return raw; }
+
+			string partHeader = "Content-Disposition: form-data; name=\"response_format\"\r\n\r\n";
+			string newPart = "--" + boundary + "\r\n" + partHeader + "verbose_json\r\n";
+
+			int existingIdx = raw.IndexOf(partHeader);
+
+			if (existingIdx >= 0)
+			{
+				int valueStart = existingIdx + partHeader.Length;
+				int valueEnd = raw.IndexOf("\r\n", valueStart);
+				if (valueEnd >= 0)
+				{
+					return raw.Substring(0, valueStart) + "verbose_json" + raw.Substring(valueEnd);
+				}
+				return raw;
+			}
+
+			string closingBoundary = "--" + boundary + "--";
+			int idx = raw.LastIndexOf(closingBoundary);
+			if (idx >= 0)
+			{ return raw.Substring(0, idx) + newPart + raw.Substring(idx); }
+
+			return raw;
+		}" />
+		<!-- 4. Replace the request body with the modified bytes -->
+		<set-body>@{
+			string raw = (string)context.Variables["requestBody"];
+			return System.Text.Encoding.GetEncoding("ISO-8859-1").GetBytes(raw);
+		}</set-body>
+		<!-- 5. Extract model field from multipart body -->
+		<set-variable name="modelId" value="@{
+			string raw = (string)context.Variables["rawBodyString"];
+			if (string.IsNullOrWhiteSpace(raw))
+			{ return null; }
+			try
+			{
+				var match = System.Text.RegularExpressions.Regex.Match(
+					raw,
+					"name=\"model\"\\s*\\r\\n\\r\\n([^\\r\\n]+)"
+				);
+				return match.Success ? match.Groups[1].Value.Trim() : null;
+			}
+			catch
+			{ return null; }
+		}" />
     </inbound>
     <!-- Control if and how the requests are forwarded to services  -->
     <backend>

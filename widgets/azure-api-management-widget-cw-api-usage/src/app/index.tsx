@@ -76,6 +76,16 @@ type GroupUserEntity = {
   }
 }
 
+type UserEntity = {
+  id: string
+  name?: string
+  properties?: {
+    firstName?: string
+    lastName?: string
+    email?: string
+  }
+}
+
 type AggregateStatsItem = {
   userName?: string
   subscriptionName: string
@@ -241,6 +251,141 @@ function getGroupUserDisplayName(user: GroupUserEntity): string {
   return fullName || user.properties?.email || user.name || user.id
 }
 
+function getUserDisplayName(user: UserEntity): string {
+  const firstName = user.properties?.firstName?.trim()
+  const lastName = user.properties?.lastName?.trim()
+  const fullName = [firstName, lastName].filter(Boolean).join(" ")
+
+  return fullName || user.properties?.email || user.name || user.id
+}
+
+function getUserLookupKeys(user: UserEntity): string[] {
+  const keys = new Set<string>()
+  const resourceName = getUserResourceName(user.name ?? user.id)
+  const fullId = normalizeText(user.id)
+  const shortName = normalizeText(user.name)
+  const email = normalizeText(user.properties?.email)
+
+  if (resourceName) keys.add(normalizeText(resourceName))
+  if (fullId) keys.add(fullId)
+  if (shortName) keys.add(shortName)
+  if (email) keys.add(email)
+
+  return Array.from(keys)
+}
+
+function getSubscriptionOwnerUserId(sub: SubscriptionEntity): string | undefined {
+  return getUserResourceName(sub.ownerId)
+}
+
+function getSubscriptionOwnerLookupKeys(sub: SubscriptionEntity): string[] {
+  const keys = new Set<string>()
+  const ownerId = sub.ownerId
+  const ownerResourceName = getSubscriptionOwnerUserId(sub)
+  const normalizedOwnerId = normalizeText(ownerId)
+  const normalizedOwnerResourceName = normalizeText(ownerResourceName)
+
+  if (normalizedOwnerId) keys.add(normalizedOwnerId)
+  if (normalizedOwnerResourceName) keys.add(normalizedOwnerResourceName)
+
+  if (ownerId) {
+    ownerId
+      .split("/")
+      .filter(Boolean)
+      .map(part => normalizeText(part))
+      .filter(Boolean)
+      .forEach(part => keys.add(part))
+  }
+
+  return Array.from(keys)
+}
+
+function getAggregateItemKey(item: AggregateStatsItem): string {
+  return `${item.subscriptionId}::${normalizeText(item.userName)}`
+}
+
+function dedupeAggregateItems(items: AggregateStatsItem[]): AggregateStatsItem[] {
+  const itemsByKey = new Map<string, AggregateStatsItem>()
+
+  items.forEach(item => {
+    const key = getAggregateItemKey(item)
+    const existing = itemsByKey.get(key)
+
+    if (!existing) {
+      itemsByKey.set(key, item)
+      return
+    }
+
+    const existingHasMetrics = existing.consumed !== undefined || existing.quota !== undefined || existing.remaining !== undefined || existing.pct !== undefined
+    const itemHasMetrics = item.consumed !== undefined || item.quota !== undefined || item.remaining !== undefined || item.pct !== undefined
+
+    if (!existingHasMetrics && itemHasMetrics) {
+      itemsByKey.set(key, item)
+      return
+    }
+
+    if (existing.error && !item.error) {
+      itemsByKey.set(key, item)
+    }
+  })
+
+  return Array.from(itemsByKey.values())
+}
+
+async function getPagedCollection<T>(request: ReturnType<typeof useRequest>, path: string): Promise<T[]> {
+  const items: T[] = []
+  let nextPath: string | undefined = path
+
+  while (nextPath) {
+    const response = await request(nextPath)
+    if (!response.ok) {
+      throw new Error(`Could not load collection (${response.status})`)
+    }
+
+    const body = await response.json() as {value?: T[]; nextLink?: string}
+    items.push(...(body.value ?? []))
+
+    if (!body.nextLink) {
+      nextPath = undefined
+      continue
+    }
+
+    try {
+      const nextUrl = new URL(body.nextLink)
+      nextPath = `${nextUrl.pathname}${nextUrl.search}`
+    } catch {
+      nextPath = body.nextLink
+    }
+  }
+
+  return items
+}
+
+async function getInitialAndPagedCollection<T>(
+  initialResponse: Response,
+  request: (url: string, method?: string) => Promise<Response>,
+): Promise<T[]> {
+  if (!initialResponse.ok) {
+    throw new Error(`Could not load collection (${initialResponse.status})`)
+  }
+
+  const firstPage = await initialResponse.json() as {value?: T[]; nextLink?: string}
+  const items = firstPage.value ?? []
+
+  if (!firstPage.nextLink) {
+    return items
+  }
+
+  try {
+    const nextUrl = new URL(firstPage.nextLink)
+    const remainingItems = await getPagedCollection<T>(request as ReturnType<typeof useRequest>, `${nextUrl.pathname}${nextUrl.search}`)
+    return [...items, ...remainingItems]
+  } catch {
+    const remainingItems = await getPagedCollection<T>(request as ReturnType<typeof useRequest>, firstPage.nextLink)
+    return [...items, ...remainingItems]
+  }
+}
+
 function summarizeUsageStats(items: AggregateStatsItem[]): AggregateSummary {
   return items.reduce<AggregateSummary>((summary, item) => ({
     totalCost: summary.totalCost + (item.consumed ?? 0),
@@ -261,6 +406,33 @@ function compareNullableStrings(a: string | undefined, b: string | undefined): n
 
 function compareNullableNumbers(a: number | undefined, b: number | undefined): number {
   return (a ?? 0) - (b ?? 0)
+}
+
+async function resolveProductName(
+  productResourcePath: string | undefined,
+  productNameByScope: Map<string, string>,
+  request: ReturnType<typeof useRequest>,
+): Promise<string | undefined> {
+  if (!productResourcePath) return undefined
+
+  const cachedProductName = productNameByScope.get(productResourcePath)
+  if (cachedProductName) return cachedProductName
+
+  try {
+    const productRes = await request(productResourcePath)
+    if (!productRes.ok) return undefined
+
+    const product: ProductEntity = await productRes.json()
+    const productName = product.properties?.displayName ?? product.properties?.title ?? product.name
+
+    if (productName) {
+      productNameByScope.set(productResourcePath, productName)
+    }
+
+    return productName
+  } catch {
+    return undefined
+  }
 }
 
 const App = () => {
@@ -308,8 +480,10 @@ const App = () => {
         if (contributorGroup?.name) {
           const groupUsersRes = await request(`/groups/${contributorGroup.name}/users`, "GET")
           groupUsersStatus = groupUsersRes.status
-          const groupUsersBody = groupUsersRes.ok ? await groupUsersRes.json() : {value: []}
-          groupUsers = groupUsersBody.value ?? []
+          if (groupUsersRes.ok) {
+            groupUsers = await getInitialAndPagedCollection<GroupUserEntity>(groupUsersRes, request)
+          }
+
           contributorUser = isCurrentUserInGroup(groupUsers, userId ?? "")
         }
 
@@ -330,9 +504,7 @@ const App = () => {
 
         // 1. List this user's subscriptions.
         const subsRes = await developerPortalRequest(`/developer/users/${userId}/subscriptions?$top=50&$skip=0&api-version=2022-04-01-preview`)
-        if (!subsRes.ok) throw new Error(`Could not load subscriptions (${subsRes.status})`)
-        const subsBody = await subsRes.json()
-        const subs: SubscriptionEntity[] = subsBody.value ?? []
+        const subs = await getInitialAndPagedCollection<SubscriptionEntity>(subsRes, developerPortalRequest)
 
         const productNameByScope = new Map<string, string>()
 
@@ -414,107 +586,121 @@ const App = () => {
 
         if (!cancelled) setItems(usageItems)
 
-        if (contributorUser && contributorGroup?.name) {
+        if (contributorGroup?.name) {
           try {
-            const aggregateResults = await Promise.all(
-              groupUsers.map(async (groupUser): Promise<AggregateStatsItem[]> => {
-                const currentGroupUserId = getUserResourceName(groupUser.name ?? groupUser.id)
-                const currentGroupUserDisplayName = getGroupUserDisplayName(groupUser)
+            const usersRes = await request("/users")
+            const allUsers = usersRes.ok
+              ? await getInitialAndPagedCollection<UserEntity>(usersRes, request)
+              : []
+            const allSubscriptionsRes = await request("/subscriptions")
+            const allSubscriptions = allSubscriptionsRes.ok
+              ? await getInitialAndPagedCollection<SubscriptionEntity>(allSubscriptionsRes, request)
+              : []
+            const userNameById = new Map<string, string>()
+            allUsers.forEach(user => {
+              const displayName = getUserDisplayName(user)
+              getUserLookupKeys(user).forEach(key => {
+                if (key) {
+                  userNameById.set(key, displayName)
+                }
+              })
+            })
+
+            const subscriptionUserNameById = new Map<string, string>()
+            await Promise.all(
+              allUsers.map(async user => {
+                const displayName = getUserDisplayName(user)
+                const userResourceName = getUserResourceName(user.name ?? user.id)
+                if (!userResourceName) return
 
                 try {
-                  const userSubsRes = await request(`/users/${currentGroupUserId}/subscriptions`)
-                  if (!userSubsRes.ok) throw new Error(`Could not load subscriptions for ${currentGroupUserId} (${userSubsRes.status})`)
+                  const userSubscriptionsRes = await request(`/users/${userResourceName}/subscriptions`)
+                  if (!userSubscriptionsRes.ok) return
 
-                  const userSubsBody = await userSubsRes.json()
-                  const userSubs: SubscriptionEntity[] = userSubsBody.value ?? []
-
-                  return Promise.all(userSubs.map(async (sub): Promise<AggregateStatsItem> => {
-                    const normalizedScope = normalizeManagementPath(getSubscriptionScope(sub) ?? "")
-                    const productResourcePath = getProductResourcePath(normalizedScope)
-                    let productName = productResourcePath ? productNameByScope.get(productResourcePath) : undefined
-
-                    if (!productName && productResourcePath) {
-                      try {
-                        const productRes = await request(productResourcePath)
-                        if (productRes.ok) {
-                          const product: ProductEntity = await productRes.json()
-                          productName = product.properties?.displayName ?? product.properties?.title ?? product.name
-                          if (productName) {
-                            productNameByScope.set(productResourcePath, productName)
-                          }
-                        }
-                      } catch {
-                        // Ignore and keep fallback values.
-                      }
+                  const userSubscriptions = await getInitialAndPagedCollection<SubscriptionEntity>(userSubscriptionsRes, request)
+                  userSubscriptions.forEach(subscription => {
+                    if (subscription.name && !subscriptionUserNameById.has(subscription.name)) {
+                      subscriptionUserNameById.set(subscription.name, displayName)
                     }
+                  })
+                } catch {
+                  // Ignore fallback lookup failures.
+                }
+              }),
+            )
 
-                    const scopeName = getScopeSegment(normalizedScope)
-                    const subscriptionName = getSubscriptionDisplayName(sub)
-                      ?? sub.name
-                    const debug: string[] = [
-                      `groupUser=${currentGroupUserId}`,
-                      `groupUserDisplayName=${currentGroupUserDisplayName}`,
-                      `subscriptionId=${sub.name}`,
-                      `subscriptionScope=${normalizedScope || "none"}`,
-                      `productResourcePath=${productResourcePath || "none"}`,
-                      `productName=${productName || "none"}`,
-                      `statisticsApiUrl=${values.statisticsApiUrl}`,
-                      `subscriptionKeyHeader=${values.subscriptionKeyHeader}`,
-                    ]
+            const aggregateResults = await Promise.all(
+              allSubscriptions.map(async (sub): Promise<AggregateStatsItem> => {
+                const normalizedScope = normalizeManagementPath(getSubscriptionScope(sub) ?? "")
+                const productResourcePath = getProductResourcePath(normalizedScope)
+                const productName = await resolveProductName(productResourcePath, productNameByScope, request)
 
-                    try {
-                      const key = await getSubscriptionKeyForAdminView(sub, request)
-                      if (!key) throw new Error("No subscription key available")
-                      debug.push("subscriptionKeyFound=yes")
+                const ownerUserId = getSubscriptionOwnerUserId(sub)
+                const ownerLookupKeys = getSubscriptionOwnerLookupKeys(sub)
+                const matchedOwnerLookupKey = ownerLookupKeys.find(key => userNameById.has(key))
+                const resolvedUserName = matchedOwnerLookupKey ? userNameById.get(matchedOwnerLookupKey) : undefined
+                const fallbackUserName = subscriptionUserNameById.get(sub.name)
+                const userName = resolvedUserName ?? fallbackUserName ?? "Unassigned"
 
-                      const statsRes = await externalRequest(values.statisticsApiUrl, {
-                        [values.subscriptionKeyHeader]: key,
-                      })
-                      debug.push(`statisticsStatus=${statsRes.status}`)
-                      if (!statsRes.ok) throw new Error(`Statistics request failed (${statsRes.status})`)
-                      const stats: UsageStats = await statsRes.json()
-                      debug.push(`statisticsResponse=${JSON.stringify(stats)}`)
+                const subscriptionName = getSubscriptionDisplayName(sub) ?? sub.name
+                const debug: string[] = [
+                  `groupUser=${ownerUserId || "unassigned"}`,
+                  `groupUserDisplayName=${userName}`,
+                  `ownerLookupKeys=${ownerLookupKeys.join(",") || "none"}`,
+                  `matchedOwnerLookupKey=${matchedOwnerLookupKey || "none"}`,
+                  `fallbackUserName=${fallbackUserName || "none"}`,
+                  `subscriptionId=${sub.name}`,
+                  `subscriptionScope=${normalizedScope || "none"}`,
+                  `productResourcePath=${productResourcePath || "none"}`,
+                  `productName=${productName || "none"}`,
+                  `subscriptionOwnerId=${sub.ownerId || "none"}`,
+                  `statisticsApiUrl=${values.statisticsApiUrl}`,
+                  `subscriptionKeyHeader=${values.subscriptionKeyHeader}`,
+                ]
 
-                      return {
-                        userName: currentGroupUserDisplayName,
-                        subscriptionName,
-                        subscriptionId: sub.name,
-                        productName,
-                        state: getSubscriptionState(sub),
-                        consumed: stats.consumed,
-                        quota: stats.quota,
-                        remaining: stats.remaining,
-                        pct: stats.pct,
-                        debug,
-                      }
-                    } catch (err) {
-                      debug.push(`error=${formatError(err)}`)
+                try {
+                  const key = await getSubscriptionKeyForAdminView(sub, request)
+                  if (!key) throw new Error("No subscription key available")
+                  debug.push("subscriptionKeyFound=yes")
 
-                      return {
-                        userName: currentGroupUserDisplayName,
-                        subscriptionName,
-                        subscriptionId: sub.name,
-                        productName,
-                        state: getSubscriptionState(sub),
-                        debug,
-                        error: formatError(err),
-                      }
-                    }
-                  }))
+                  const statsRes = await externalRequest(values.statisticsApiUrl, {
+                    [values.subscriptionKeyHeader]: key,
+                  })
+                  debug.push(`statisticsStatus=${statsRes.status}`)
+                  if (!statsRes.ok) throw new Error(`Statistics request failed (${statsRes.status})`)
+                  const stats: UsageStats = await statsRes.json()
+                  debug.push(`statisticsResponse=${JSON.stringify(stats)}`)
+
+                  return {
+                    userName,
+                    subscriptionName,
+                    subscriptionId: sub.name,
+                    productName,
+                    state: getSubscriptionState(sub),
+                    consumed: stats.consumed,
+                    quota: stats.quota,
+                    remaining: stats.remaining,
+                    pct: stats.pct,
+                    debug,
+                  }
                 } catch (err) {
-                  return [{
-                    userName: currentGroupUserDisplayName,
-                    subscriptionName: currentGroupUserDisplayName,
-                    subscriptionId: currentGroupUserId,
-                    debug: [`groupUser=${currentGroupUserId}`, `groupUserDisplayName=${currentGroupUserDisplayName}`],
+                  debug.push(`error=${formatError(err)}`)
+
+                  return {
+                    userName,
+                    subscriptionName,
+                    subscriptionId: sub.name,
+                    productName,
+                    state: getSubscriptionState(sub),
+                    debug,
                     error: formatError(err),
-                  }]
+                  }
                 }
               }),
             )
 
             if (!cancelled) {
-              setAllItems(aggregateResults.flat())
+              setAllItems(dedupeAggregateItems(aggregateResults))
             }
           } catch (err) {
             if (!cancelled) {

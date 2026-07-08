@@ -9,15 +9,23 @@ OpenAI Video V1 Generations
     <inbound>
         <base />
         <rewrite-uri template="/openai/v1/videos" copy-unmatched-params="false" />
-		<set-variable name="requestBody" value="@(context.Request.Body.As<string>(preserveContent: true))" />
+        <!-- 1. Read raw multipart body as Latin-1 string (preserves binary bytes) -->
+        <set-variable name="rawBodyString" value="@{
+            byte[] bodyBytes = context.Request.Body.As<byte[]>(preserveContent: true);
+            return System.Text.Encoding.GetEncoding("ISO-8859-1").GetString(bodyBytes);
+        }" />
+        <!-- 2. Extract model field from multipart body -->
         <set-variable name="modelId" value="@{
-            string raw = (string)context.Variables["requestBody"];
+            string raw = (string)context.Variables["rawBodyString"];
             if (string.IsNullOrWhiteSpace(raw))
             { return null; }
             try
             {
-                var body = JObject.Parse(raw);
-                return body?["model"]?.Value<string>();
+                var match = System.Text.RegularExpressions.Regex.Match(
+                    raw,
+                    "name=\"model\"\\s*\\r\\n\\r\\n([^\\r\\n]+)"
+                );
+                return match.Success ? match.Groups[1].Value.Trim() : null;
             }
             catch
             { return null; }
@@ -107,8 +115,8 @@ OpenAI Video V1 Generations
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
             if (model.IndexOf("SORA2-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.6; }
-            return 0.6; // Default fallback
+            { return 0.1; }
+            return 0.1; // Default fallback
         }" />
         <!-- 5. Calculate cost -->
         <set-variable name="totalCost" value="@{
