@@ -141,7 +141,7 @@ OpenAI Audio Transcriptions
         <!-- 2. Extract token usage from the cached variable -->
         <set-variable name="actualSeconds" value="@{
             var body = (JObject)context.Variables["responseJson"];
-            var totalSeconds = body?["duration"]?.Value<int>() ?? 0;
+            double totalSeconds = body?["duration"]?.Value<double>() ?? 0.0;
             return totalSeconds;
         }" />
         <!-- 3. Load existing counters from cache -->
@@ -152,13 +152,13 @@ OpenAI Audio Transcriptions
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
             if (model.IndexOf("WHISPER-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.36; }
-            return 0.5; // Default fallback
+            { return 0.0001; } //0.36 per hour
+            return 0.001; // Default fallback
         }" />
         <!-- 5. Calculate cost -->
         <set-variable name="totalCost" value="@{
             double rate = (double)context.Variables["totalCostPerS"];
-			double seconds = (double)(int)context.Variables["actualSeconds"];
+			double seconds = (double)context.Variables["actualSeconds"];
 			return rate * seconds;
         }" />
         <!-- 6. Calculate current cost -->

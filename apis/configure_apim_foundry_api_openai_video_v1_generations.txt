@@ -104,7 +104,7 @@ OpenAI Video V1 Generations
         <!-- 2. Extract token usage from the cached variable -->
         <set-variable name="actualSeconds" value="@{
             var body = (JObject)context.Variables["responseJson"];
-            var totalSeconds = body?["seconds"]?.Value<int>() ?? 0;
+            double totalSeconds = body?["seconds"]?.Value<double>() ?? 0.0;
             return totalSeconds;
         }" />
         <!-- 3. Load existing counters from cache -->
@@ -121,7 +121,7 @@ OpenAI Video V1 Generations
         <!-- 5. Calculate cost -->
         <set-variable name="totalCost" value="@{
             double rate = (double)context.Variables["totalCostPerS"];
-			double seconds = (double)(int)context.Variables["actualSeconds"];
+			double seconds = (double)context.Variables["actualSeconds"];
 			return rate * seconds;
         }" />
         <!-- 6. Calculate current cost -->
