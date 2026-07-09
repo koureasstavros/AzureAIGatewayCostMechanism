@@ -111,6 +111,11 @@ OpenAI Text V1 Responses
             var inputTokens = body?["usage"]?["input_tokens"]?.Value<int>() ?? 0;
             return inputTokens;
         }" />
+        <set-variable name="actualCachedInputTokens" value="@{
+            var body = (JObject)context.Variables["responseJson"];
+            var cachedTokens = body?["usage"]?["input_tokens_details"]?["cached_tokens"]?.Value<int>() ?? 0;
+            return cachedTokens;
+        }" />
         <set-variable name="actualOutputTokens" value="@{
             var body = (JObject)context.Variables["responseJson"];
             var outputTokens = body?["usage"]?["output_tokens"]?.Value<int>() ?? 0;
@@ -133,6 +138,20 @@ OpenAI Text V1 Responses
             { return 5.0; }
             return 5.0; // Default fallback
         }" />
+        <set-variable name="inputCachedCostPerM" value="@{
+            var model = (string)context.Variables["modelId"];
+            if (string.IsNullOrEmpty(model))
+            { return 0.0; }            
+            if (model.IndexOf("GPT54NANO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.02; }
+            if (model.IndexOf("GPT54MINI-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.075; }
+            if (model.IndexOf("GPT54-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.25; }
+            if (model.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.5; }
+            return 1.0; // Default fallback            
+        }" />
         <set-variable name="outputCostPerM" value="@{
             var model = (string)context.Variables["modelId"];
             if (string.IsNullOrEmpty(model))
@@ -151,12 +170,17 @@ OpenAI Text V1 Responses
         <set-variable name="inputCost" value="@{
             double rate = (double)context.Variables["inputCostPerM"];
 			double tokens = (double)(int)context.Variables["actualInputTokens"];
-			return rate * tokens / 1000000.0;
+			double cachedrate = (double)context.Variables["inputCachedCostPerM"];
+			double cachedtokens = (double)(int)context.Variables["actualCachedInputTokens"];
+            double cost = rate * (tokens - cachedtokens) / 1000000.0;
+            double cachedcost = cachedrate * cachedtokens / 1000000.0;
+			return cost + cachedcost;
         }" />
         <set-variable name="outputCost" value="@{
             double rate = (double)context.Variables["outputCostPerM"];
 			double tokens = (double)(int)context.Variables["actualOutputTokens"];
-			return rate * tokens / 1000000.0;
+            double cost = rate * tokens / 1000000.0;
+			return cost;
         }" />
         <!-- 6. Calculate current cost -->
         <set-variable name="currentCost" value="@{
