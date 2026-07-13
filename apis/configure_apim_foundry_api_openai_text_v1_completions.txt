@@ -14,7 +14,20 @@ OpenAI Text V1 Completions
     <inbound>
         <base />
         <rewrite-uri template="/openai/v1/chat/completions" copy-unmatched-params="false" />
-		<set-variable name="requestBody" value="@(context.Request.Body.As<string>(preserveContent: true))" />
+		<set-variable name="requestBody" value="@{
+            var body = context.Request.Body.As<JObject>(preserveContent: true);
+            bool isStreamingRequest = body["stream"]?.Value<bool>() ?? false;
+            if (isStreamingRequest)
+            {
+                body["stream_options"] = new JObject
+                {
+                    ["include_usage"] = true // <-- overwrite here
+                };
+            }
+            return body.ToString();
+        }" />
+        <!-- Replace request body -->
+        <set-body>@((string)context.Variables["requestBody"])</set-body>
         <set-variable name="modelId" value="@{
             string raw = (string)context.Variables["requestBody"];
             if (string.IsNullOrWhiteSpace(raw))
@@ -61,55 +74,110 @@ OpenAI Text V1 Completions
             string trimmed = raw.TrimStart();
             return trimmed.Length == 0 || trimmed[0] != '{';
         }" />
-        <set-variable name="responseJson" value="@{
-            string raw = (string)context.Variables["responseBody"];
-            if (string.IsNullOrWhiteSpace(raw))
-            { return new JObject(); }
- 
+		<set-variable name="responseJson" value="@{
             bool isStreaming = (bool)context.Variables["isStreamingResponse"];
- 
+            string raw = (string)context.Variables["responseBody"];
+
             if (!isStreaming)
             {
                 // --- Non-streaming path: body IS the response object directly ---
                 try { return JObject.Parse(raw); }
                 catch { return new JObject(); }
             }
- 
-            // --- Streaming path: scan SSE "data: " lines for response.completed ---
+
+            if (string.IsNullOrWhiteSpace(raw))
+            { return new JObject(); }
+
             var lines = raw.Split('\n');
- 
+
+            string id = null;
+            string model = null;
+            long created = 0;
+            string finishReason = null;
+            string role = "assistant";
+            var contentBuilder = new System.Text.StringBuilder();
+            JObject usage = null;
+            JObject responsesApiCompleted = null; // in case backend used Responses API shape
+
             foreach (var rawLine in lines)
             {
                 var line = rawLine.TrimEnd('\r').Trim();
                 if (!line.StartsWith("data: "))
                 { continue; }
- 
+
                 var payload = line.Substring(6).Trim();
                 if (payload == "[DONE]" || string.IsNullOrWhiteSpace(payload))
                 { continue; }
- 
-                try
+
+                JObject evt;
+                try { evt = JObject.Parse(payload); }
+                catch { continue; } // skip partial/obfuscated lines
+
+                // --- Responses API streaming: one event has the full final object ---
+                var eventType = (string)evt["type"];
+                if (eventType == "response.completed")
                 {
-                    var evt = JObject.Parse(payload);
-                    var eventType = (string)evt["type"];
- 
-                    if (eventType == "response.completed")
-                    {
-                        // The actual response object (with model, usage, etc.) is nested under "response"
-                        var inner = evt["response"] as JObject;
-                        if (inner != null)
-                        { return inner; }
-                    }
-                }
-                catch
-                {
-                    // Partial/malformed line (e.g. obfuscated delta payloads) — skip and keep scanning
+                    responsesApiCompleted = evt["response"] as JObject;
                     continue;
                 }
+
+                // --- Chat Completions streaming: accumulate fields across chunks ---
+                if (id == null) { id = (string)evt["id"]; }
+                if (model == null) { model = (string)evt["model"]; }
+                if (created == 0) { created = evt["created"]?.Value<long>() ?? 0; }
+
+                var choice = evt["choices"]?.FirstOrDefault() as JObject;
+                if (choice != null)
+                {
+                    var delta = choice["delta"] as JObject;
+                    if (delta != null)
+                    {
+                        var deltaRole = (string)delta["role"];
+                        if (!string.IsNullOrEmpty(deltaRole)) { role = deltaRole; }
+
+                        var deltaContent = (string)delta["content"];
+                        if (!string.IsNullOrEmpty(deltaContent)) { contentBuilder.Append(deltaContent); }
+                    }
+
+                    var fr = (string)choice["finish_reason"];
+                    if (!string.IsNullOrEmpty(fr)) { finishReason = fr; }
+                }
+
+                // Final chunk carries usage at top level (stream_options.include_usage = true)
+                if (evt["usage"] != null && evt["usage"].Type != JTokenType.Null)
+                {
+                    usage = evt["usage"] as JObject;
+                }
             }
- 
-            // No response.completed found — return empty object so downstream ?? defaults kick in
-            return new JObject();
+
+            // If backend used Responses API shape, that single event already has everything
+            if (responsesApiCompleted != null)
+            { return responsesApiCompleted; }
+
+            // Otherwise, build one consolidated Chat-Completions-style object
+            var result = new JObject
+            {
+                ["id"] = id,
+                ["object"] = "chat.completion",
+                ["created"] = created,
+                ["model"] = model,
+                ["choices"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["index"] = 0,
+                        ["message"] = new JObject
+                        {
+                            ["role"] = role,
+                            ["content"] = contentBuilder.ToString()
+                        },
+                        ["finish_reason"] = finishReason
+                    }
+                },
+                ["usage"] = usage ?? new JObject()
+            };
+
+            return result;
         }" />
         <!-- 2. Extract token usage from the cached variable -->
         <set-variable name="actualInputTokens" value="@{
