@@ -1,0 +1,27 @@
+Add additional lines into the customMetrics table like this one with name Request Correlation and Cost Correlation
+You can have up to 10 dimensions and 50K values per dimension
+
+----------------------------------------------------------------------------------------------
+
+<emit-metric name="Request Correlation" value="1">
+    <dimension name="User ID" value="@(context.User?.Id)" />
+    <dimension name="User Email" value="@(context.User?.Email)" />
+    <dimension name="Product ID" value="@(context.Product.Id)" />
+    <dimension name="Product Name" value="@(context.Product.Name)" />
+    <dimension name="Subscription ID" value="@(context.Subscription?.Id)" />
+    <dimension name="Subscription Name" value="@(context.Subscription?.Name)" />
+    <dimension name="API ID" value="@(context.Api.Id)" />
+    <dimension name="Operation ID" value="@(context.Operation.Id)" />
+</emit-metric>
+<emit-metric name="Cost Correlation" value="@{
+		double v = 0.0;
+		if (context.Variables.ContainsKey("currentCost"))
+		{ v = Convert.ToDouble(context.Variables["currentCost"]); }
+		return v;
+	}">
+    <dimension name="Subscription ID" value="@(context.Subscription?.Id)" />
+    <dimension name="API ID" value="@(context.Api.Id)" />
+    <dimension name="Operation ID" value="@(context.Operation.Id)" />
+    <dimension name="Status Code" value="@(context.Response.StatusCode.ToString())" />
+    <dimension name="Model ID" value="@(context.Variables.GetValueOrDefault("modelId",""))" />
+</emit-metric>

@@ -37,3 +37,4 @@ You can have up to 10 dimensions and 50K values per dimension
         { v = Convert.ToDouble(context.Variables["currentCost"]); }
         return v.ToString("F6");
     }" />
+</emit-metric>

@@ -187,7 +187,8 @@ OpenAI Text V1 Completions
         }" />
         <set-variable name="actualCachedInputTokens" value="@{
             var body = (JObject)context.Variables["responseJson"];
-            var cachedTokens = body?["usage"]?["prompt_tokens_details"]?["cached_tokens"]?.Value<int>() ?? 0;
+            var promptDetails = body?["usage"]?["prompt_tokens_details"] as JObject;
+            var cachedTokens = promptDetails?["cached_tokens"]?.Value<int>() ?? 0;
             return cachedTokens;
         }" />
         <set-variable name="actualOutputTokens" value="@{
