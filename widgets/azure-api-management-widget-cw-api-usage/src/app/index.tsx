@@ -106,6 +106,18 @@ type SortableColumn = "userName" | "productName" | "subscriptionName" | "state" 
 
 type SortDirection = "asc" | "desc"
 
+type StatisticUpdateType = "cost" | "quota"
+
+type StatisticEditValues = {
+  cost: string
+  quota: string
+}
+
+type UpdateMessage = {
+  kind: "success" | "error"
+  text: string
+}
+
 type AggregateSummary = {
   totalCost: number
   totalInputTokens: number
@@ -452,12 +464,22 @@ const App = () => {
   const [sortColumn, setSortColumn] = useState<SortableColumn>("userName")
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
   const [refreshToken, setRefreshToken] = useState(0)
+  const [isMineLoading, setIsMineLoading] = useState(true)
+  const [isAllLoading, setIsAllLoading] = useState(true)
+  const [currentUserStatisticsKey, setCurrentUserStatisticsKey] = useState<string | undefined>()
+  const [editingSubscriptionId, setEditingSubscriptionId] = useState<string | undefined>()
+  const [statisticEditValues, setStatisticEditValues] = useState<StatisticEditValues>({cost: "", quota: ""})
+  const [updatingSubscriptionId, setUpdatingSubscriptionId] = useState<string | undefined>()
+  const [updateMessage, setUpdateMessage] = useState<UpdateMessage | undefined>()
 
   const refresh = useCallback(() => {
     setItems(undefined)
     setAllItems(undefined)
     setLoadError(undefined)
     setAllLoadError(undefined)
+    setIsMineLoading(true)
+    setIsAllLoading(true)
+    setCurrentUserStatisticsKey(undefined)
     setRefreshToken(value => value + 1)
   }, [])
 
@@ -532,7 +554,7 @@ const App = () => {
 
         // 2. For each subscription, use the key from the subscriptions payload,
         //    then call your /statistics API with that key.
-        const usageItems = await Promise.all(
+        const usageItemPromises =
           subs.map(async (sub): Promise<UsageItem> => {
             const normalizedScope = normalizeManagementPath(getSubscriptionScope(sub) ?? "")
             const productName = normalizedScope ? productNameByScope.get(normalizedScope) : undefined
@@ -556,6 +578,9 @@ const App = () => {
               })
               debug.push(`statisticsStatus=${statsRes.status}`)
               if (!statsRes.ok) throw new Error(`Statistics request failed (${statsRes.status})`)
+              if (!cancelled) {
+                setCurrentUserStatisticsKey(currentKey => currentKey ?? key)
+              }
               const stats: UsageStats = await statsRes.json()
               debug.push(`statisticsResponse=${JSON.stringify(stats)}`)
 
@@ -581,10 +606,18 @@ const App = () => {
                 error: formatError(err),
               }
             }
-          }),
-        )
+          })
 
-        if (!cancelled) setItems(usageItems)
+        if (!cancelled) setItems([])
+        usageItemPromises.forEach(promise => {
+          void promise.then(item => {
+            if (!cancelled) {
+              setItems(currentItems => [...(currentItems ?? []), item])
+            }
+          })
+        })
+        await Promise.all(usageItemPromises)
+        if (!cancelled) setIsMineLoading(false)
 
         if (contributorGroup?.name) {
           try {
@@ -629,7 +662,7 @@ const App = () => {
               }),
             )
 
-            const aggregateResults = await Promise.all(
+            const aggregateResultPromises =
               allSubscriptions.map(async (sub): Promise<AggregateStatsItem> => {
                 const normalizedScope = normalizeManagementPath(getSubscriptionScope(sub) ?? "")
                 const productResourcePath = getProductResourcePath(normalizedScope)
@@ -640,12 +673,12 @@ const App = () => {
                 const matchedOwnerLookupKey = ownerLookupKeys.find(key => userNameById.has(key))
                 const resolvedUserName = matchedOwnerLookupKey ? userNameById.get(matchedOwnerLookupKey) : undefined
                 const fallbackUserName = subscriptionUserNameById.get(sub.name)
-                const userName = resolvedUserName ?? fallbackUserName ?? "Unassigned"
+                const userName = resolvedUserName ?? fallbackUserName
 
                 const subscriptionName = getSubscriptionDisplayName(sub) ?? sub.name
                 const debug: string[] = [
                   `groupUser=${ownerUserId || "unassigned"}`,
-                  `groupUserDisplayName=${userName}`,
+                  `groupUserDisplayName=${userName || "none"}`,
                   `ownerLookupKeys=${ownerLookupKeys.join(",") || "none"}`,
                   `matchedOwnerLookupKey=${matchedOwnerLookupKey || "none"}`,
                   `fallbackUserName=${fallbackUserName || "none"}`,
@@ -696,23 +729,37 @@ const App = () => {
                     error: formatError(err),
                   }
                 }
-              }),
-            )
+              })
 
             if (!cancelled) {
-              setAllItems(dedupeAggregateItems(aggregateResults))
+              setAllItems([])
             }
+            aggregateResultPromises.forEach(promise => {
+              void promise.then(item => {
+                if (!cancelled) {
+                  setAllItems(currentItems => dedupeAggregateItems([...(currentItems ?? []), item]))
+                }
+              })
+            })
+            await Promise.all(aggregateResultPromises)
+            if (!cancelled) setIsAllLoading(false)
           } catch (err) {
             if (!cancelled) {
               setAllLoadError(formatError(err))
+              setIsAllLoading(false)
             }
           }
         } else if (!cancelled) {
           setAllItems(undefined)
           setAllLoadError(undefined)
+          setIsAllLoading(false)
         }
       } catch (err) {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err))
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : String(err))
+          setIsMineLoading(false)
+          setIsAllLoading(false)
+        }
       }
     }
 
@@ -789,12 +836,90 @@ const App = () => {
     return sortDirection === "asc" ? "↑" : "↓"
   }, [sortColumn, sortDirection])
 
+  const startEditingStatistics = useCallback((item: AggregateStatsItem) => {
+    setEditingSubscriptionId(item.subscriptionId)
+    setStatisticEditValues({
+      cost: item.consumed?.toString() ?? "",
+      quota: item.quota?.toString() ?? "",
+    })
+    setUpdateMessage(undefined)
+  }, [])
+
+  const cancelEditingStatistics = useCallback(() => {
+    setEditingSubscriptionId(undefined)
+    setStatisticEditValues({cost: "", quota: ""})
+  }, [])
+
+  const saveStatistics = useCallback(async (item: AggregateStatsItem) => {
+    const updates: Array<{type: StatisticUpdateType; value: string}> = []
+    const fields: Array<{type: StatisticUpdateType; value: string; currentValue: number | undefined}> = [
+      {type: "cost", value: statisticEditValues.cost.trim(), currentValue: item.consumed},
+      {type: "quota", value: statisticEditValues.quota.trim(), currentValue: item.quota},
+    ]
+
+    for (const field of fields) {
+      if (!field.value) continue
+
+      const numericValue = Number(field.value)
+      if (!Number.isFinite(numericValue) || numericValue < 0) {
+        setUpdateMessage({kind: "error", text: `${field.type === "cost" ? "Cost" : "Quota"} must be a non-negative number.`})
+        return
+      }
+
+      if (field.currentValue === undefined || numericValue !== field.currentValue) {
+        updates.push({type: field.type, value: field.value})
+      }
+    }
+
+    if (updates.length === 0) {
+      setUpdateMessage({kind: "error", text: "Change the cost or quota before saving."})
+      return
+    }
+
+    setUpdatingSubscriptionId(item.subscriptionId)
+    setUpdateMessage(undefined)
+
+    try {
+      if (!currentUserStatisticsKey) {
+        throw new Error("No statistics subscription key is available for the logged-in user.")
+      }
+
+      for (const update of updates) {
+        const response = await externalRequest(values.statisticsApiUrl, {
+          [values.subscriptionKeyHeader]: currentUserStatisticsKey,
+          "Content-Type": "application/json",
+        }, {
+          method: "POST",
+          body: JSON.stringify({
+            subscriptionId: item.subscriptionId,
+            type: update.type,
+            value: update.value,
+          }),
+        })
+
+        if (!response.ok) {
+          const responseText = await response.text()
+          throw new Error(`Statistics update failed (${response.status})${responseText ? `: ${responseText}` : ""}`)
+        }
+      }
+
+      setEditingSubscriptionId(undefined)
+      setStatisticEditValues({cost: "", quota: ""})
+      setUpdateMessage({kind: "success", text: "Statistics updated successfully."})
+      refresh()
+    } catch (err) {
+      setUpdateMessage({kind: "error", text: formatError(err)})
+    } finally {
+      setUpdatingSubscriptionId(undefined)
+    }
+  }, [currentUserStatisticsKey, externalRequest, refresh, statisticEditValues, values.statisticsApiUrl, values.subscriptionKeyHeader])
+
   const mineContent = (() => {
     if (loadError) {
       return <div className="usage-error">Could not load your usage: {loadError}</div>
     }
 
-    if (!sortedUsageItems) {
+    if (!sortedUsageItems || (sortedUsageItems.length === 0 && isMineLoading)) {
       return <div className="usage-loading">Loading your usage…</div>
     }
 
@@ -804,6 +929,7 @@ const App = () => {
 
     return (
       <>
+        {isMineLoading ? <div className="usage-loading usage-loading-more">Loading more subscriptions…</div> : null}
         {sortedUsageItems.map(item => (
           <div className="usage-card" key={item.subscriptionId}>
             <div className="usage-card-header">
@@ -860,7 +986,7 @@ const App = () => {
       return <div className="usage-error">Could not load all statistics: {allLoadError}</div>
     }
 
-    if (!sortedAllItems) {
+    if (!sortedAllItems || (sortedAllItems.length === 0 && isAllLoading)) {
       return <div className="usage-loading">Loading all statistics…</div>
     }
 
@@ -870,6 +996,12 @@ const App = () => {
 
     return (
       <div className="usage-all-stats">
+        {isAllLoading ? <div className="usage-loading">Loading more subscription statistics…</div> : null}
+        {updateMessage ? (
+          <div className={updateMessage.kind === "error" ? "usage-error" : "usage-success"} role="status">
+            {updateMessage.text}
+          </div>
+        ) : null}
         {aggregateSummary ? (
           <div className="usage-summary-grid">
             <div className="usage-summary-card">
@@ -902,6 +1034,7 @@ const App = () => {
                 <th><button className="usage-sort-button" onClick={() => toggleSort("quota")} type="button">Quota {getSortIndicator("quota")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("remaining")} type="button">Remaining {getSortIndicator("remaining")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("pct")} type="button">Usage {getSortIndicator("pct")}</button></th>
+                <th>Actions</th>
                 <th>Debug</th>
               </tr>
             </thead>
@@ -912,10 +1045,67 @@ const App = () => {
                   <td>{item.productName ?? "-"}</td>
                   <td>{item.subscriptionName}</td>
                   <td>{item.state ?? "-"}</td>
-                  <td>{formatNumber(item.consumed, 2)}</td>
-                  <td>{formatNumber(item.quota, 2)}</td>
+                  <td>
+                    {editingSubscriptionId === item.subscriptionId ? (
+                      <input
+                        aria-label={`Consumed cost for ${item.subscriptionName}`}
+                        className="usage-edit-input"
+                        min="0"
+                        onChange={event => setStatisticEditValues(current => ({...current, cost: event.target.value}))}
+                        step="0.01"
+                        type="number"
+                        value={statisticEditValues.cost}
+                      />
+                    ) : formatNumber(item.consumed, 2)}
+                  </td>
+                  <td>
+                    {editingSubscriptionId === item.subscriptionId ? (
+                      <input
+                        aria-label={`Quota for ${item.subscriptionName}`}
+                        className="usage-edit-input"
+                        min="0"
+                        onChange={event => setStatisticEditValues(current => ({...current, quota: event.target.value}))}
+                        step="0.01"
+                        type="number"
+                        value={statisticEditValues.quota}
+                      />
+                    ) : formatNumber(item.quota, 2)}
+                  </td>
                   <td>{formatNumber(item.remaining, 2)}</td>
                   <td>{formatNumber(item.pct, 1)}%</td>
+                  <td>
+                    <div className="usage-row-actions">
+                      {editingSubscriptionId === item.subscriptionId ? (
+                        <>
+                          <button
+                            className="usage-row-button usage-row-button-primary"
+                            disabled={updatingSubscriptionId === item.subscriptionId}
+                            onClick={() => void saveStatistics(item)}
+                            type="button"
+                          >
+                            {updatingSubscriptionId === item.subscriptionId ? "Saving…" : "Save"}
+                          </button>
+                          <button
+                            className="usage-row-button"
+                            disabled={updatingSubscriptionId === item.subscriptionId}
+                            onClick={cancelEditingStatistics}
+                            type="button"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="usage-row-button"
+                          disabled={Boolean(updatingSubscriptionId)}
+                          onClick={() => startEditingStatistics(item)}
+                          type="button"
+                        >
+                          Edit
+                        </button>
+                      )}
+                    </div>
+                  </td>
                   <td>
                     {item.error || item.debug?.length ? (
                       <details className="usage-debug usage-debug-inline">

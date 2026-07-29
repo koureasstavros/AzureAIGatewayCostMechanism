@@ -48,7 +48,11 @@ export function useDeveloperPortalRequest(): (url: string, method?: string) => P
 // Deliberately does NOT send the ARM management token or any credentials -
 // that token is scoped to the ARM management API only and has no meaning to
 // your own gateway.
-export function useExternalRequest(): (url: string, headers: Record<string, string>) => Promise<Response> {
-  return useCallback((url, headers) => fetch(url, {headers}), [])
+export function useExternalRequest(): (
+  url: string,
+  headers: Record<string, string>,
+  options?: Omit<RequestInit, "headers">,
+) => Promise<Response> {
+  return useCallback((url, headers, options) => fetch(url, {...options, headers}), [])
 }
 

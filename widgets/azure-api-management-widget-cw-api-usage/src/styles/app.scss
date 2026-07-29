@@ -218,9 +218,18 @@ textarea {
   font-size: 13px;
 }
 
+.usage-success {
+  color: #107c10;
+  font-size: 13px;
+}
+
 .usage-loading {
   color: #777;
   font-size: 14px;
+}
+
+.usage-loading-more {
+  margin-bottom: 12px;
 }
 
 .usage-debug {
@@ -355,4 +364,54 @@ textarea {
   color: #605e5c;
   font-size: 11px;
   word-break: break-word;
+}
+
+.usage-edit-input {
+  width: 90px;
+  min-width: 72px;
+  padding: 5px 7px;
+  border: 1px solid #8a8886;
+  border-radius: 4px;
+  color: #323130;
+  font: inherit;
+
+  &:focus {
+    border-color: #0078d4;
+    outline: 1px solid #0078d4;
+  }
+}
+
+.usage-row-actions {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.usage-row-button {
+  border: 1px solid #c8c6c4;
+  background: #fff;
+  color: #323130;
+  border-radius: 4px;
+  padding: 5px 9px;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #f3f2f1;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  &.usage-row-button-primary {
+    border-color: #0078d4;
+    background: #0078d4;
+    color: #fff;
+
+    &:hover:not(:disabled) {
+      background: #106ebe;
+    }
+  }
 }

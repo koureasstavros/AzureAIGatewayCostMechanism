@@ -1,0 +1,66 @@
+Generic Statistics
+---------------------------------------
+/statistics
+---------------------------------------
+<policies>
+    <inbound>
+        <cors allow-credentials="false">
+            <allowed-origins>
+                <origin>https://ai-hub-dev-portal.domain.com</origin>
+            </allowed-origins>
+            <allowed-methods>
+                <method>GET</method>
+                <method>OPTIONS</method>
+            </allowed-methods>
+            <allowed-headers>
+                <header>x-apim-key</header>
+                <header>Content-Type</header>
+                <header>Authorization</header>
+            </allowed-headers>
+            <expose-headers>
+                <header>Content-Type</header>
+                <header>Content-Length</header>
+            </expose-headers>
+        </cors>
+    </inbound>
+    <backend />
+    <!-- Customize the responses -->
+    <outbound>
+        <!-- Calculate current year-month -->
+        <set-variable name="yearMonth" value="@{
+            return DateTime.UtcNow.ToString("yyyy-MM");
+        }" />
+        <!-- Load current accumulated cost from cache -->
+        <cache-lookup-value key="@($"quota/{context.Subscription.Id}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" caching-type="external" />
+        <!-- Load current accumulated quota from cache -->
+        <cache-lookup-value key="@($"quota/{context.Subscription.Id}/quota/{context.Variables["yearMonth"]}")" variable-name="storedQuota" caching-type="external" />
+        <choose>
+            <when condition="@(context.Variables.ContainsKey("storedQuota") == false)">
+                <cache-store-value key="@($"quota/{context.Subscription.Id}/quota/{context.Variables["yearMonth"]}")" value="100" duration="2592000" caching-type="external" />
+                <set-variable name="storedQuota" value="100" />
+            </when>
+        </choose>
+        <return-response>
+            <set-status code="200" />
+            <set-header name="Content-Type" exists-action="override">
+                <value>application/json</value>
+            </set-header>
+            <set-body>@{
+                var consumed   = Convert.ToDouble(context.Variables.GetValueOrDefault("storedCost", (object)0));
+                var quota      = Convert.ToDouble(context.Variables.GetValueOrDefault("storedQuota", (object)0));
+                var remaining  = Convert.ToDouble(quota - consumed);
+                var pct        = quota > 0 ? (double)Math.Round((double)consumed / quota * 100) : 0;
+                return Newtonsoft.Json.JsonConvert.SerializeObject(new {
+                    consumed  = consumed,
+                    quota = quota,
+                    remaining = remaining,
+                    pct = pct
+                });
+            }</set-body>
+        </return-response>
+    </outbound>
+    <!-- Handle exceptions and customize error responses  -->
+    <on-error>
+        <base />
+    </on-error>
+</policies>

@@ -1,0 +1,79 @@
+Generic Statistics
+---------------------------------------
+/statistics
+---------------------------------------
+<policies>
+	<inbound>
+		<cors allow-credentials="false">
+			<allowed-origins>
+				<origin>https://ai-hub-dev-portal.domain.com</origin>
+			</allowed-origins>
+			<allowed-methods>
+				<method>GET</method>
+				<method>OPTIONS</method>
+			</allowed-methods>
+			<allowed-headers>
+				<header>x-apim-key</header>
+				<header>Content-Type</header>
+				<header>Authorization</header>
+			</allowed-headers>
+			<expose-headers>
+				<header>Content-Type</header>
+				<header>Content-Length</header>
+			</expose-headers>
+		</cors>
+		<!-- Expect JSON body: { "subscriptionId": "abc123", "value": 42.5 } -->
+		<set-variable name="body" value="@(context.Request.Body.As<JObject>(preserveContent: true))" />
+		<set-variable name="subId" value="@(((JObject)context.Variables["body"])["subscriptionId"].ToString())" />
+		<set-variable name="type" value="@(((JObject)context.Variables["body"])["type"].ToString())" />
+		<set-variable name="newValue" value="@(((JObject)context.Variables["body"])["value"].Value<double>())" />
+		<!-- Calculate current year-month -->
+		<set-variable name="yearMonth" value="@{
+            return DateTime.UtcNow.ToString("yyyy-MM");
+        }" />
+		<!-- Optional but recommended: make sure the caller can only write their OWN subscription's cost -->
+		<choose>
+			<when condition="@(context.Subscription.Id == "master" || context.User?.Id == "administrator" || (context.User?.Groups?.Any(g => g.Id == "administrators" || g.Id == "contributors") ?? false))">
+				<choose>
+					<when condition="@((string)context.Variables["type"] == "cost")">
+						<cache-store-value key="@($"quota/{context.Variables["subId"]}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newValue"])" duration="2592000" caching-type="external" />
+					</when>
+					<when condition="@((string)context.Variables["type"] == "quota")">
+						<cache-store-value key="@($"quota/{context.Variables["subId"]}/quota/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newValue"])" duration="2592000" caching-type="external" />
+					</when>
+				</choose>
+				<return-response>
+					<set-status code="200" reason="OK" />
+					<set-body>@{
+                        return new JObject(
+                            new JProperty("subscriptionId", context.Variables.GetValueOrDefault<string>("subId")),
+                            new JProperty("type", context.Variables.GetValueOrDefault<string>("type")),
+                            new JProperty("value", context.Variables.GetValueOrDefault<double>("newValue")),
+                            new JProperty("user", context.User?.Id.ToString()),
+                            new JProperty("subscription", context.Subscription?.Id.ToString()),
+                            new JProperty("groups", context.User?.Groups == null ? "no-groups" : string.Join(", ", context.User.Groups.Select(g => g.Id))),
+                            new JProperty("status", "stored")
+                        ).ToString();
+                    }</set-body>
+				</return-response>
+			</when>
+			<otherwise>
+				<return-response>
+					<set-status code="403" reason="Forbidden" />
+					<set-body>@{
+                        return $"{{\"error\": \"subscriptionId does not match caller's subscription: {context.Subscription?.Id}\"}}";
+                    }</set-body>
+				</return-response>
+			</otherwise>
+		</choose>
+	</inbound>
+	<backend>
+		<base />
+	</backend>
+	<outbound>
+		<base />
+	</outbound>
+	<on-error>
+		<base />
+	</on-error>
+</policies>
