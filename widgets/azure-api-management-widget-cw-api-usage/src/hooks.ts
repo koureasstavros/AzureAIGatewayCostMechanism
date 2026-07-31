@@ -19,14 +19,39 @@ export function useOnChange(): OnChange<Values> {
 export function useRequest(): (url: string, method?: string) => Promise<Response> {
   const secrets = useSecrets()
 
-  return useCallback((url, method = "GET") =>
-    fetch(
-      `${secrets.managementApiUrl}${url}?api-version=${secrets.apiVersion}`,
-      {
-        method,
-        headers: secrets.token ? {Authorization: secrets.token} : undefined,
-      },
-    ), [secrets])
+  return useCallback((url, method = "GET") => {
+    const managementUrl = new URL(secrets.managementApiUrl)
+    let requestUrl: URL
+
+    try {
+      requestUrl = new URL(url)
+    } catch {
+      if (url.startsWith("?")) {
+        requestUrl = new URL(managementUrl)
+        requestUrl.search = url
+      } else {
+        const normalizedPath = url.startsWith("/") ? url : `/${url}`
+        const managementPath = managementUrl.pathname.replace(/\/$/, "")
+        requestUrl = normalizePathForComparison(normalizedPath).startsWith(`${normalizePathForComparison(managementPath)}/`)
+          || normalizePathForComparison(normalizedPath) === normalizePathForComparison(managementPath)
+          ? new URL(normalizedPath, managementUrl.origin)
+          : new URL(`${managementPath}${normalizedPath}`, managementUrl.origin)
+      }
+    }
+
+    if (!requestUrl.searchParams.has("api-version")) {
+      requestUrl.searchParams.set("api-version", secrets.apiVersion)
+    }
+
+    return fetch(requestUrl.toString(), {
+      method,
+      headers: secrets.token ? {Authorization: secrets.token} : undefined,
+    })
+  }, [secrets])
+}
+
+function normalizePathForComparison(path: string): string {
+  return path.replace(/\/$/, "").toLowerCase()
 }
 
 export function useDeveloperPortalRequest(): (url: string, method?: string) => Promise<Response> {
@@ -34,10 +59,16 @@ export function useDeveloperPortalRequest(): (url: string, method?: string) => P
 
   return useCallback((url, method = "GET") => {
     const baseUrl = new URL(secrets.managementApiUrl)
-    const normalizedPath = url.startsWith("/") ? url : `/${url}`
-    const requestUrl = `${baseUrl.origin}${normalizedPath}`
+    let requestUrl: URL
 
-    return fetch(requestUrl, {
+    try {
+      requestUrl = new URL(url)
+    } catch {
+      const normalizedPath = url.startsWith("/") ? url : `/${url}`
+      requestUrl = new URL(normalizedPath, baseUrl.origin)
+    }
+
+    return fetch(requestUrl.toString(), {
       method,
       headers: secrets.token ? {Authorization: secrets.token} : undefined,
     })

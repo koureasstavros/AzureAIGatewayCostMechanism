@@ -4,6 +4,7 @@ import {useDeveloperPortalRequest, useExternalRequest, useRequest, useSecrets, u
 type SubscriptionProperties = {
   displayName?: string
   name?: string
+  ownerId?: string
   primaryKey?: string
   secondaryKey?: string
   state?: string
@@ -418,12 +419,16 @@ function getUserLookupKeys(user: UserEntity): string[] {
 }
 
 function getSubscriptionOwnerUserId(sub: SubscriptionEntity): string | undefined {
-  return getUserResourceName(sub.ownerId)
+  return getUserResourceName(getSubscriptionOwnerId(sub))
+}
+
+function getSubscriptionOwnerId(sub: SubscriptionEntity): string | undefined {
+  return sub.ownerId ?? sub.properties?.ownerId
 }
 
 function getSubscriptionOwnerLookupKeys(sub: SubscriptionEntity): string[] {
   const keys = new Set<string>()
-  const ownerId = sub.ownerId
+  const ownerId = getSubscriptionOwnerId(sub)
   const ownerResourceName = getSubscriptionOwnerUserId(sub)
   const normalizedOwnerId = normalizeText(ownerId)
   const normalizedOwnerResourceName = normalizeText(ownerResourceName)
@@ -478,8 +483,14 @@ function dedupeAggregateItems(items: AggregateStatsItem[]): AggregateStatsItem[]
 async function getPagedCollection<T>(request: ReturnType<typeof useRequest>, path: string): Promise<T[]> {
   const items: T[] = []
   let nextPath: string | undefined = path
+  const visitedPaths = new Set<string>()
 
   while (nextPath) {
+    if (visitedPaths.has(nextPath)) {
+      throw new Error("Collection paging returned a repeated nextLink")
+    }
+    visitedPaths.add(nextPath)
+
     const response = await request(nextPath)
     if (!response.ok) {
       throw new Error(`Could not load collection (${response.status})`)
@@ -488,17 +499,7 @@ async function getPagedCollection<T>(request: ReturnType<typeof useRequest>, pat
     const body = await response.json() as {value?: T[]; nextLink?: string}
     items.push(...(body.value ?? []))
 
-    if (!body.nextLink) {
-      nextPath = undefined
-      continue
-    }
-
-    try {
-      const nextUrl = new URL(body.nextLink)
-      nextPath = `${nextUrl.pathname}${nextUrl.search}`
-    } catch {
-      nextPath = body.nextLink
-    }
+    nextPath = body.nextLink
   }
 
   return items
@@ -519,14 +520,8 @@ async function getInitialAndPagedCollection<T>(
     return items
   }
 
-  try {
-    const nextUrl = new URL(firstPage.nextLink)
-    const remainingItems = await getPagedCollection<T>(request as ReturnType<typeof useRequest>, `${nextUrl.pathname}${nextUrl.search}`)
-    return [...items, ...remainingItems]
-  } catch {
-    const remainingItems = await getPagedCollection<T>(request as ReturnType<typeof useRequest>, firstPage.nextLink)
-    return [...items, ...remainingItems]
-  }
+  const remainingItems = await getPagedCollection<T>(request as ReturnType<typeof useRequest>, firstPage.nextLink)
+  return [...items, ...remainingItems]
 }
 
 function summarizeUsageStats(items: AggregateStatsItem[]): AggregateSummary {
@@ -623,8 +618,9 @@ const App = () => {
     async function load() {
       try {
         const groupsRes = await request("/groups")
-        const groupsBody = groupsRes.ok ? await groupsRes.json() : {value: []}
-        const groups: GroupEntity[] = groupsBody.value ?? []
+        const groups = groupsRes.ok
+          ? await getInitialAndPagedCollection<GroupEntity>(groupsRes, request)
+          : []
         const contributorGroup = groups.find(group => normalizeText(getGroupName(group)) === normalizeText(values.contributorGroupName))
 
         let contributorUser = false
@@ -669,14 +665,17 @@ const App = () => {
               .filter((scope): scope is string => Boolean(scope) && isProductScope(scope)),
           ))
             .map(async scope => {
+              const productResourcePath = getProductResourcePath(scope)
+              if (!productResourcePath) return
+
               try {
-                const productRes = await request(scope)
+                const productRes = await request(productResourcePath)
                 if (!productRes.ok) return
 
                 const product: ProductEntity = await productRes.json()
                 const productName = product.properties?.displayName ?? product.properties?.title ?? product.name
                 if (productName) {
-                  productNameByScope.set(scope, productName)
+                  productNameByScope.set(productResourcePath, productName)
                 }
               } catch {
                 // Ignore product lookup failures and fall back to subscription id.
@@ -689,7 +688,8 @@ const App = () => {
         const usageItemPromises =
           subs.map(sub => limitStatisticsConcurrency(async (): Promise<UsageItem> => {
             const normalizedScope = normalizeManagementPath(getSubscriptionScope(sub) ?? "")
-            const productName = normalizedScope ? productNameByScope.get(normalizedScope) : undefined
+            const productResourcePath = getProductResourcePath(normalizedScope)
+            const productName = productResourcePath ? productNameByScope.get(productResourcePath) : undefined
             const scopeName = getScopeSegment(normalizedScope)
             const subscriptionName = getSubscriptionDisplayName(sub)
               ?? sub.name
@@ -752,7 +752,7 @@ const App = () => {
         await Promise.all(usageItemPromises)
         if (!cancelled) setIsMineLoading(false)
 
-        if (contributorGroup?.name) {
+        if (contributorUser && contributorGroup?.name) {
           try {
             const usersRes = await request("/users")
             const allUsers = usersRes.ok
@@ -785,8 +785,9 @@ const App = () => {
 
                   const userSubscriptions = await getInitialAndPagedCollection<SubscriptionEntity>(userSubscriptionsRes, request)
                   userSubscriptions.forEach(subscription => {
-                    if (subscription.name && !subscriptionUserNameById.has(subscription.name)) {
-                      subscriptionUserNameById.set(subscription.name, displayName)
+                    const subscriptionKey = normalizeText(subscription.name || getUserResourceName(subscription.id))
+                    if (subscriptionKey && !subscriptionUserNameById.has(subscriptionKey)) {
+                      subscriptionUserNameById.set(subscriptionKey, displayName)
                     }
                   })
                 } catch {
@@ -805,7 +806,7 @@ const App = () => {
                 const ownerLookupKeys = getSubscriptionOwnerLookupKeys(sub)
                 const matchedOwnerLookupKey = ownerLookupKeys.find(key => userNameById.has(key))
                 const resolvedUserName = matchedOwnerLookupKey ? userNameById.get(matchedOwnerLookupKey) : undefined
-                const fallbackUserName = subscriptionUserNameById.get(sub.name)
+                const fallbackUserName = subscriptionUserNameById.get(normalizeText(sub.name || getUserResourceName(sub.id)))
                 const userName = resolvedUserName ?? fallbackUserName
 
                 const subscriptionName = getSubscriptionDisplayName(sub) ?? sub.name
@@ -819,7 +820,7 @@ const App = () => {
                   `subscriptionScope=${normalizedScope || "none"}`,
                   `productResourcePath=${productResourcePath || "none"}`,
                   `productName=${productName || "none"}`,
-                  `subscriptionOwnerId=${sub.ownerId || "none"}`,
+                  `subscriptionOwnerId=${getSubscriptionOwnerId(sub) || "none"}`,
                   `statisticsApiUrl=${values.statisticsApiUrl}`,
                   `subscriptionKeyHeader=${values.subscriptionKeyHeader}`,
                 ]
