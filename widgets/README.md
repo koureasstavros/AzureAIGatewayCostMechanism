@@ -43,6 +43,8 @@ Configure the widget with the following values:
   - This header or query parameter must already be configured for subscription validation.
 - **Authorized group:** `contributors`
   - This API Management group must include the users who need access to the consolidated data.
+- **Allow allow-same-origin:** `true`
+  - This allows rendering from devices and browsers with strict policies like iOS.
 
 ## Statistics API configuration
 
@@ -81,9 +83,21 @@ The statistics API must be included in all products that expose the regular API 
 
 ## Required IAM permissions
 
-Grant the API Management `contributors` group the following permissions:
+Grant the API Management `individual` user, or `contributors` group the following permissions:
 
-- `Microsoft.ApiManagement/service/read`
-- `Microsoft.ApiManagement/service/users/read`
-- `Microsoft.ApiManagement/service/groups/read`
-- `Microsoft.ApiManagement/service/groups/users/read`
+ - "Microsoft.ApiManagement/service/read",
+ - "Microsoft.ApiManagement/service/users/read",
+ - "Microsoft.ApiManagement/service/groups/read",
+ - "Microsoft.ApiManagement/service/groups/users/read",
+ - "Microsoft.ApiManagement/service/products/read",
+ - "Microsoft.ApiManagement/service/subscriptions/read",
+ - "Microsoft.ApiManagement/service/users/subscriptions/read",
+ - "Microsoft.ApiManagement/service/subscriptions/listSecrets/action"
+
+ or grand the following role (which embeds the necessary permissions):
+ - API Management Service Contributor
+
+ ## Builtin administrator portal design
+ During portal design it might be the case that frame controls like edit widget or delete options not appear. In this case open DevTools and navigate to console.
+ Type: allow pasting
+ Type: document.querySelector('custom-widget-runtime iframe').style.pointerEvents = 'none'

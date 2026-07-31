@@ -4,9 +4,21 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>API Usage</title>
+  <style>
+    .widget-boot-status {
+      min-height: 96px;
+      padding: 16px;
+      box-sizing: border-box;
+      color: #605e5c;
+      font: 14px "Segoe UI", sans-serif;
+      text-align: center;
+    }
+  </style>
 </head>
 <body class="height-fill">
-<div id="root" class="height-fill"></div>
+<div id="root" class="height-fill">
+  <div class="widget-boot-status" role="status">Starting API usage…</div>
+</div>
 <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

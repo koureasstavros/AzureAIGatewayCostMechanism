@@ -136,7 +136,7 @@ function prettifyName(value: string): string {
 function getScopeSegment(scope: string | undefined): string | undefined {
   if (!scope) return undefined
   const parts = scope.split("/").filter(Boolean)
-  return parts.at(-1)
+  return parts[parts.length - 1]
 }
 
 function getProductResourcePath(scope: string | undefined): string | undefined {
@@ -216,7 +216,8 @@ function getSubscriptionDisplayName(sub: SubscriptionEntity): string | undefined
 
 function getUserResourceName(value: string | undefined): string {
   if (!value) return ""
-  return value.split("/").filter(Boolean).at(-1) ?? value
+  const parts = value.split("/").filter(Boolean)
+  return parts[parts.length - 1] ?? value
 }
 
 function normalizeText(value: string | undefined): string {
@@ -233,7 +234,8 @@ function isCurrentUserInGroup(users: GroupUserEntity[], currentUserId: string): 
 
   return users.some(user => {
     const nameMatch = normalizeText(user.name) === expected
-    const idSegment = user.id.split("/").filter(Boolean).at(-1)
+    const idParts = user.id.split("/").filter(Boolean)
+    const idSegment = idParts[idParts.length - 1]
     const idMatch = normalizeText(idSegment) === expected
     return nameMatch || idMatch
   })
