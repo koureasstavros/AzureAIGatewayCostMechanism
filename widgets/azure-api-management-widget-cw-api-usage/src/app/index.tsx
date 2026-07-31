@@ -125,6 +125,131 @@ type AggregateSummary = {
   totalTokens: number
 }
 
+type ExternalRequest = ReturnType<typeof useExternalRequest>
+
+const STATISTICS_MAX_CONCURRENCY = 4
+const STATISTICS_MAX_ATTEMPTS = 3
+const STATISTICS_TIMEOUT_MS = 15000
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise(resolve => window.setTimeout(resolve, milliseconds))
+}
+
+function createConcurrencyLimiter(maxConcurrency: number) {
+  let activeCount = 0
+  const queue: Array<() => void> = []
+
+  return async function run<T>(operation: () => Promise<T>): Promise<T> {
+    if (activeCount >= maxConcurrency) {
+      await new Promise<void>(resolve => queue.push(resolve))
+    }
+
+    activeCount += 1
+    try {
+      return await operation()
+    } finally {
+      activeCount -= 1
+      queue.shift()?.()
+    }
+  }
+}
+
+function isRetryableStatisticsStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500
+}
+
+function getRetryDelay(response: Response | undefined, attempt: number): number {
+  const retryAfter = response?.headers.get("Retry-After")
+  if (retryAfter) {
+    const seconds = Number(retryAfter)
+    if (Number.isFinite(seconds)) {
+      return Math.min(Math.max(seconds * 1000, 0), 10000)
+    }
+
+    const retryDate = Date.parse(retryAfter)
+    if (Number.isFinite(retryDate)) {
+      return Math.min(Math.max(retryDate - Date.now(), 0), 10000)
+    }
+  }
+
+  return 500 * (2 ** (attempt - 1)) + Math.floor(Math.random() * 250)
+}
+
+function validateUsageStats(value: unknown): UsageStats {
+  if (!value || typeof value !== "object") {
+    throw new Error("Statistics response was not a JSON object")
+  }
+
+  const stats = value as Partial<UsageStats>
+  const fields: Array<keyof UsageStats> = ["consumed", "quota", "remaining", "pct"]
+  for (const field of fields) {
+    if (typeof stats[field] !== "number" || !Number.isFinite(stats[field])) {
+      throw new Error(`Statistics response has an invalid ${field} value`)
+    }
+  }
+
+  return stats as UsageStats
+}
+
+async function requestStatistics(
+  externalRequest: ExternalRequest,
+  url: string,
+  subscriptionKeyHeader: string,
+  subscriptionKey: string,
+  debug: string[],
+): Promise<UsageStats> {
+  let lastError: unknown
+
+  for (let attempt = 1; attempt <= STATISTICS_MAX_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), STATISTICS_TIMEOUT_MS)
+    let response: Response | undefined
+
+    try {
+      response = await externalRequest(url, {
+        [subscriptionKeyHeader]: subscriptionKey,
+      }, {
+        signal: controller.signal,
+      })
+      debug.push(`statisticsAttempt${attempt}Status=${response.status}`)
+
+      if (response.ok) {
+        const body: unknown = await response.json()
+        return validateUsageStats(body)
+      }
+
+      let responseDetails = ""
+      if (attempt === STATISTICS_MAX_ATTEMPTS || !isRetryableStatisticsStatus(response.status)) {
+        responseDetails = (await response.text()).trim().slice(0, 300)
+      }
+      lastError = new Error(`Statistics request failed (${response.status})${responseDetails ? `: ${responseDetails}` : ""}`)
+
+      if (!isRetryableStatisticsStatus(response.status)) {
+        throw lastError
+      }
+    } catch (error) {
+      lastError = controller.signal.aborted
+        ? new Error(`Statistics request timed out after ${STATISTICS_TIMEOUT_MS / 1000} seconds`)
+        : error
+      debug.push(`statisticsAttempt${attempt}Error=${formatError(lastError)}`)
+
+      if (error instanceof Error && error.message.startsWith("Statistics request failed") && response && !isRetryableStatisticsStatus(response.status)) {
+        throw error
+      }
+    } finally {
+      window.clearTimeout(timeoutId)
+    }
+
+    if (attempt < STATISTICS_MAX_ATTEMPTS) {
+      const retryDelay = getRetryDelay(response, attempt)
+      debug.push(`statisticsAttempt${attempt}RetryDelayMs=${retryDelay}`)
+      await delay(retryDelay)
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Statistics request failed after retries")
+}
+
 function prettifyName(value: string): string {
   return value
     .split(/[\-_]/g)
@@ -246,6 +371,10 @@ function formatNumber(value: number | undefined, fractionDigits = 0): string {
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   })
+}
+
+function formatOptionalNumber(value: number | undefined, fractionDigits = 0, suffix = ""): string {
+  return value === undefined ? "Unavailable" : `${formatNumber(value, fractionDigits)}${suffix}`
 }
 
 function formatCurrency(value: number | undefined): string {
@@ -489,6 +618,7 @@ const App = () => {
     if (!userId) return
 
     let cancelled = false
+    const limitStatisticsConcurrency = createConcurrencyLimiter(STATISTICS_MAX_CONCURRENCY)
 
     async function load() {
       try {
@@ -557,7 +687,7 @@ const App = () => {
         // 2. For each subscription, use the key from the subscriptions payload,
         //    then call your /statistics API with that key.
         const usageItemPromises =
-          subs.map(async (sub): Promise<UsageItem> => {
+          subs.map(sub => limitStatisticsConcurrency(async (): Promise<UsageItem> => {
             const normalizedScope = normalizeManagementPath(getSubscriptionScope(sub) ?? "")
             const productName = normalizedScope ? productNameByScope.get(normalizedScope) : undefined
             const scopeName = getScopeSegment(normalizedScope)
@@ -575,15 +705,16 @@ const App = () => {
               if (!key) throw new Error("No subscription key available")
               debug.push(`subscriptionKeyFound=${key ? "yes" : "no"}`)
 
-              const statsRes = await externalRequest(values.statisticsApiUrl, {
-                [values.subscriptionKeyHeader]: key,
-              })
-              debug.push(`statisticsStatus=${statsRes.status}`)
-              if (!statsRes.ok) throw new Error(`Statistics request failed (${statsRes.status})`)
+              const stats = await requestStatistics(
+                externalRequest,
+                values.statisticsApiUrl,
+                values.subscriptionKeyHeader,
+                key,
+                debug,
+              )
               if (!cancelled) {
                 setCurrentUserStatisticsKey(currentKey => currentKey ?? key)
               }
-              const stats: UsageStats = await statsRes.json()
               debug.push(`statisticsResponse=${JSON.stringify(stats)}`)
 
               return {
@@ -608,7 +739,7 @@ const App = () => {
                 error: formatError(err),
               }
             }
-          })
+          }))
 
         if (!cancelled) setItems([])
         usageItemPromises.forEach(promise => {
@@ -665,7 +796,7 @@ const App = () => {
             )
 
             const aggregateResultPromises =
-              allSubscriptions.map(async (sub): Promise<AggregateStatsItem> => {
+              allSubscriptions.map(sub => limitStatisticsConcurrency(async (): Promise<AggregateStatsItem> => {
                 const normalizedScope = normalizeManagementPath(getSubscriptionScope(sub) ?? "")
                 const productResourcePath = getProductResourcePath(normalizedScope)
                 const productName = await resolveProductName(productResourcePath, productNameByScope, request)
@@ -698,12 +829,13 @@ const App = () => {
                   if (!key) throw new Error("No subscription key available")
                   debug.push("subscriptionKeyFound=yes")
 
-                  const statsRes = await externalRequest(values.statisticsApiUrl, {
-                    [values.subscriptionKeyHeader]: key,
-                  })
-                  debug.push(`statisticsStatus=${statsRes.status}`)
-                  if (!statsRes.ok) throw new Error(`Statistics request failed (${statsRes.status})`)
-                  const stats: UsageStats = await statsRes.json()
+                  const stats = await requestStatistics(
+                    externalRequest,
+                    values.statisticsApiUrl,
+                    values.subscriptionKeyHeader,
+                    key,
+                    debug,
+                  )
                   debug.push(`statisticsResponse=${JSON.stringify(stats)}`)
 
                   return {
@@ -731,7 +863,7 @@ const App = () => {
                     error: formatError(err),
                   }
                 }
-              })
+              }))
 
             if (!cancelled) {
               setAllItems([])
@@ -772,9 +904,19 @@ const App = () => {
   }, [userId, request, developerPortalRequest, externalRequest, values.statisticsApiUrl, values.subscriptionKeyHeader, values.contributorGroupName, refreshToken])
 
   const aggregateSummary = useMemo<AggregateSummary | undefined>(() => {
-    if (!allItems?.length) return undefined
+    const validItems = allItems?.filter(item => !item.error && item.consumed !== undefined)
+    if (!validItems?.length) return undefined
 
-    return summarizeUsageStats(allItems)
+    return summarizeUsageStats(validItems)
+  }, [allItems])
+
+  const averageUsagePct = useMemo<number | undefined>(() => {
+    const percentages = allItems
+      ?.map(item => item.pct)
+      .filter((value): value is number => value !== undefined)
+    if (!percentages?.length) return undefined
+
+    return percentages.reduce((sum, value) => sum + value, 0) / percentages.length
   }, [allItems])
 
   const sortedUsageItems = useMemo(() => {
@@ -1020,7 +1162,7 @@ const App = () => {
             </div>
             <div className="usage-summary-card">
               <span className="usage-summary-label">Average usage %</span>
-              <strong>{formatNumber(sortedAllItems.reduce((sum, item) => sum + (item.pct ?? 0), 0) / sortedAllItems.length, 1)}%</strong>
+              <strong>{formatOptionalNumber(averageUsagePct, 1, "%")}</strong>
             </div>
           </div>
         ) : null}
@@ -1058,7 +1200,7 @@ const App = () => {
                         type="number"
                         value={statisticEditValues.cost}
                       />
-                    ) : formatNumber(item.consumed, 2)}
+                    ) : formatOptionalNumber(item.consumed, 2)}
                   </td>
                   <td>
                     {editingSubscriptionId === item.subscriptionId ? (
@@ -1071,10 +1213,10 @@ const App = () => {
                         type="number"
                         value={statisticEditValues.quota}
                       />
-                    ) : formatNumber(item.quota, 2)}
+                    ) : formatOptionalNumber(item.quota, 2)}
                   </td>
-                  <td>{formatNumber(item.remaining, 2)}</td>
-                  <td>{formatNumber(item.pct, 1)}%</td>
+                  <td>{formatOptionalNumber(item.remaining, 2)}</td>
+                  <td>{formatOptionalNumber(item.pct, 1, "%")}</td>
                   <td>
                     <div className="usage-row-actions">
                       {editingSubscriptionId === item.subscriptionId ? (
@@ -1099,9 +1241,10 @@ const App = () => {
                       ) : (
                         <button
                           className="usage-row-button"
-                          disabled={Boolean(updatingSubscriptionId)}
+                          disabled={Boolean(updatingSubscriptionId) || Boolean(item.error)}
                           onClick={() => startEditingStatistics(item)}
                           type="button"
+                          title={item.error ? "Refresh the statistics before editing this row" : undefined}
                         >
                           Edit
                         </button>
