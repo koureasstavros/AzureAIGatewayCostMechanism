@@ -448,28 +448,6 @@ textarea {
 }
 
 @media (max-width: 600px) {
-  .usage-widget-root {
-    overflow-x: hidden;
-    overflow-y: auto;
-  }
-
-  .usage-widget-content {
-    flex: 0 0 auto;
-    min-height: auto;
-    overflow: visible;
-  }
-
-  .usage-all-stats {
-    height: auto;
-    min-height: auto;
-    overflow: visible;
-  }
-
-  .usage-table-wrapper {
-    flex: 0 0 auto;
-    max-height: 60vh;
-  }
-
   .usage-widget-header,
   .usage-widget-actions,
   .usage-tabs {
