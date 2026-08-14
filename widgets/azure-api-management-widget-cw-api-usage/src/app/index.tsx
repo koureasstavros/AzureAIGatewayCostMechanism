@@ -131,6 +131,12 @@ type ExternalRequest = ReturnType<typeof useExternalRequest>
 const STATISTICS_MAX_CONCURRENCY = 4
 const STATISTICS_MAX_ATTEMPTS = 3
 const STATISTICS_TIMEOUT_MS = 15000
+const PERCENTAGE_DECIMAL_PLACES = 2
+
+function roundPercentage(value: number): number {
+  const factor = 10 ** PERCENTAGE_DECIMAL_PLACES
+  return Math.round((value + Number.EPSILON) * factor) / factor
+}
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise(resolve => window.setTimeout(resolve, milliseconds))
@@ -189,7 +195,13 @@ function validateUsageStats(value: unknown): UsageStats {
     }
   }
 
-  return stats as UsageStats
+  const validatedStats = stats as UsageStats
+  return {
+    ...validatedStats,
+    pct: roundPercentage(validatedStats.quota > 0
+      ? validatedStats.consumed / validatedStats.quota * 100
+      : 0),
+  }
 }
 
 async function requestStatistics(
@@ -917,7 +929,7 @@ const App = () => {
       .filter((value): value is number => value !== undefined)
     if (!percentages?.length) return undefined
 
-    return percentages.reduce((sum, value) => sum + value, 0) / percentages.length
+    return roundPercentage(percentages.reduce((sum, value) => sum + value, 0) / percentages.length)
   }, [allItems])
 
   const sortedUsageItems = useMemo(() => {
@@ -1104,7 +1116,7 @@ const App = () => {
                 </div>
                 <div className="usage-meta">
                   <span>{item.stats.consumed.toFixed(2)} / {item.stats.quota} used</span>
-                  <span>{item.stats.remaining.toFixed(2)} remaining ({item.stats.pct.toFixed(1)}%)</span>
+                  <span>{item.stats.remaining.toFixed(2)} remaining ({item.stats.pct.toFixed(PERCENTAGE_DECIMAL_PLACES)}%)</span>
                 </div>
                 {item.debug?.length ? (
                   <details className="usage-debug">
@@ -1163,7 +1175,7 @@ const App = () => {
             </div>
             <div className="usage-summary-card">
               <span className="usage-summary-label">Average usage %</span>
-              <strong>{formatOptionalNumber(averageUsagePct, 1, "%")}</strong>
+              <strong>{formatOptionalNumber(averageUsagePct, PERCENTAGE_DECIMAL_PLACES, "%")}</strong>
             </div>
           </div>
         ) : null}
@@ -1217,7 +1229,7 @@ const App = () => {
                     ) : formatOptionalNumber(item.quota, 2)}
                   </td>
                   <td>{formatOptionalNumber(item.remaining, 2)}</td>
-                  <td>{formatOptionalNumber(item.pct, 1, "%")}</td>
+                  <td>{formatOptionalNumber(item.pct, PERCENTAGE_DECIMAL_PLACES, "%")}</td>
                   <td>
                     <div className="usage-row-actions">
                       {editingSubscriptionId === item.subscriptionId ? (
