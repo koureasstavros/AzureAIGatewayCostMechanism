@@ -1162,6 +1162,14 @@ const App = () => {
         {aggregateSummary ? (
           <div className="usage-summary-grid">
             <div className="usage-summary-card">
+              <span className="usage-summary-label">Active subscriptions</span>
+              <strong>{formatNumber(sortedAllItems.filter(item => (
+                item.state?.toLowerCase() === "active"
+                && !item.error
+                && item.consumed !== undefined
+              )).length, 0)}</strong>
+            </div>
+            <div className="usage-summary-card">
               <span className="usage-summary-label">Total consumed</span>
               <strong>{formatNumber(aggregateSummary.totalCost, 2)}</strong>
             </div>
@@ -1327,7 +1335,9 @@ const App = () => {
           </ul>
         </details>
       ) : null}
-      {activeTab === "all" && isContributorUser ? allContent : mineContent}
+      <div className="usage-widget-content">
+        {activeTab === "all" && isContributorUser ? allContent : mineContent}
+      </div>
     </div>
   )
 }

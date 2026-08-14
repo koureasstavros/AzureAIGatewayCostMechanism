@@ -36,8 +36,12 @@ The widget will appear in the **Custom Widgets** section of the API Management d
 ## Widget settings
 
 Configure the widget with the following values:
+- **Width**: `px` or `%`
+  - This allows the configuration of the width, need to be configured for each view.
+- **Height**: `px` or `%`
+  - This allows the configuration of the height, need to be configured for each view.
 - **Allow allow-same-origin:** `true`
-  - This allows rendering from devices and browsers with strict policies like iOS.
+  - This allows rendering from devices and/or browsers with strict policies like iOS.
 
 ## Widget Portal authentication
 
