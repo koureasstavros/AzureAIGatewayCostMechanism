@@ -105,7 +105,7 @@ type AggregateStatsItem = {
 
 type TabKey = "mine" | "all"
 
-type SortableColumn = "userName" | "productName" | "subscriptionName" | "state" | "consumed" | "quota" | "remaining" | "pct"
+type SortableColumn = "userName" | "productName" | "subscriptionName" | "state" | "track" | "consumed" | "quota" | "remaining" | "pct"
 
 type SortDirection = "asc" | "desc"
 
@@ -604,8 +604,8 @@ const App = () => {
   const [isContributorUser, setIsContributorUser] = useState(false)
   const [contributorDebug, setContributorDebug] = useState<string[]>([])
   const [activeTab, setActiveTab] = useState<TabKey>("mine")
-  const [sortColumn, setSortColumn] = useState<SortableColumn>("userName")
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
+  const [sortColumn, setSortColumn] = useState<SortableColumn>("consumed")
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [refreshToken, setRefreshToken] = useState(0)
   const [isMineLoading, setIsMineLoading] = useState(true)
   const [isAllLoading, setIsAllLoading] = useState(true)
@@ -963,6 +963,8 @@ const App = () => {
             return compareNullableStrings(left.subscriptionName, right.subscriptionName)
           case "state":
             return compareNullableStrings(left.state, right.state)
+          case "track":
+            return Number(left.track ?? false) - Number(right.track ?? false)
           case "consumed":
             return compareNullableNumbers(left.consumed, right.consumed)
           case "quota":
@@ -1207,7 +1209,7 @@ const App = () => {
                 <th><button className="usage-sort-button" onClick={() => toggleSort("productName")} type="button">Product Name {getSortIndicator("productName")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("subscriptionName")} type="button">Subscription Name {getSortIndicator("subscriptionName")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("state")} type="button">State {getSortIndicator("state")}</button></th>
-                <th>Track</th>
+                <th><button className="usage-sort-button" onClick={() => toggleSort("track")} type="button">Track {getSortIndicator("track")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("consumed")} type="button">Consumed {getSortIndicator("consumed")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("quota")} type="button">Quota {getSortIndicator("quota")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("remaining")} type="button">Remaining {getSortIndicator("remaining")}</button></th>
