@@ -30,10 +30,24 @@ Generic Statistics
         <set-variable name="yearMonth" value="@{
             return DateTime.UtcNow.ToString("yyyy-MM");
         }" />
+        <!-- Load current permanent track from cache -->
+        <cache-lookup-value key="@($"quota/{context.Subscription.Id}/track/permanent")" variable-name="storedTrack" caching-type="external" />
         <!-- Load current accumulated cost from cache -->
         <cache-lookup-value key="@($"quota/{context.Subscription.Id}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" caching-type="external" />
         <!-- Load current accumulated quota from cache -->
         <cache-lookup-value key="@($"quota/{context.Subscription.Id}/quota/{context.Variables["yearMonth"]}")" variable-name="storedQuota" caching-type="external" />
+        <choose>
+            <when condition="@(context.Variables.ContainsKey("storedTrack") == false)">
+                <cache-store-value key="@($"quota/{context.Subscription.Id}/track/permanent")" value="true" duration="2147483647" caching-type="external" />
+                <set-variable name="storedTrack" value="true" />
+            </when>
+        </choose>
+        <choose>
+            <when condition="@(context.Variables.ContainsKey("storedCost") == false)">
+                <cache-store-value key="@($"quota/{context.Subscription.Id}/cost/{context.Variables["yearMonth"]}")" value="0" duration="2592000" caching-type="external" />
+                <set-variable name="storedCost" value="0" />
+            </when>
+        </choose>
         <choose>
             <when condition="@(context.Variables.ContainsKey("storedQuota") == false)">
                 <cache-store-value key="@($"quota/{context.Subscription.Id}/quota/{context.Variables["yearMonth"]}")" value="100" duration="2592000" caching-type="external" />
@@ -46,11 +60,13 @@ Generic Statistics
                 <value>application/json</value>
             </set-header>
             <set-body>@{
+                var track      = Convert.ToBoolean(context.Variables.GetValueOrDefault("storedTrack", (object)true));
                 var consumed   = Convert.ToDouble(context.Variables.GetValueOrDefault("storedCost", (object)0));
                 var quota      = Convert.ToDouble(context.Variables.GetValueOrDefault("storedQuota", (object)0));
                 var remaining  = Convert.ToDouble(quota - consumed);
                 var pct        = quota > 0 ? (double)Math.Round((double)consumed / quota * 100) : 0;
                 return Newtonsoft.Json.JsonConvert.SerializeObject(new {
+                    track = track,
                     consumed  = consumed,
                     quota = quota,
                     remaining = remaining,

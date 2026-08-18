@@ -10,6 +10,7 @@ Generic Statistics
 			</allowed-origins>
 			<allowed-methods>
 				<method>GET</method>
+				<method>POST</method>
 				<method>OPTIONS</method>
 			</allowed-methods>
 			<allowed-headers>
@@ -22,11 +23,10 @@ Generic Statistics
 				<header>Content-Length</header>
 			</expose-headers>
 		</cors>
-		<!-- Expect JSON body: { "subscriptionId": "abc123", "value": 42.5 } -->
+		<!-- Expect JSON body: { "subscriptionId": "abc123", "type": "cost|quota|track", "value": 42.5|true } -->
 		<set-variable name="body" value="@(context.Request.Body.As<JObject>(preserveContent: true))" />
 		<set-variable name="subId" value="@(((JObject)context.Variables["body"])["subscriptionId"].ToString())" />
 		<set-variable name="type" value="@(((JObject)context.Variables["body"])["type"].ToString())" />
-		<set-variable name="newValue" value="@(((JObject)context.Variables["body"])["value"].Value<double>())" />
 		<!-- Calculate current year-month -->
 		<set-variable name="yearMonth" value="@{
             return DateTime.UtcNow.ToString("yyyy-MM");
@@ -35,10 +35,16 @@ Generic Statistics
 		<choose>
 			<when condition="@(context.Subscription.Id == "master" || context.User?.Id == "administrator" || (context.User?.Groups?.Any(g => g.Id == "administrators" || g.Id == "contributors") ?? false))">
 				<choose>
+					<when condition="@((string)context.Variables["type"] == "track")">
+						<set-variable name="newValue" value="@(((JObject)context.Variables["body"])["value"].Value<bool>())" />
+						<cache-store-value key="@($"quota/{context.Variables["subId"]}/track/permanent")" value="@((bool)context.Variables["newValue"])" duration="2147483647" caching-type="external" />
+					</when>
 					<when condition="@((string)context.Variables["type"] == "cost")">
+						<set-variable name="newValue" value="@(((JObject)context.Variables["body"])["value"].Value<double>())" />
 						<cache-store-value key="@($"quota/{context.Variables["subId"]}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newValue"])" duration="2592000" caching-type="external" />
 					</when>
 					<when condition="@((string)context.Variables["type"] == "quota")">
+						<set-variable name="newValue" value="@(((JObject)context.Variables["body"])["value"].Value<double>())" />
 						<cache-store-value key="@($"quota/{context.Variables["subId"]}/quota/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newValue"])" duration="2592000" caching-type="external" />
 					</when>
 				</choose>
@@ -48,7 +54,7 @@ Generic Statistics
                         return new JObject(
                             new JProperty("subscriptionId", context.Variables.GetValueOrDefault<string>("subId")),
                             new JProperty("type", context.Variables.GetValueOrDefault<string>("type")),
-                            new JProperty("value", context.Variables.GetValueOrDefault<double>("newValue")),
+                            new JProperty("value", JToken.FromObject(context.Variables["newValue"])),
                             new JProperty("user", context.User?.Id.ToString()),
                             new JProperty("subscription", context.Subscription?.Id.ToString()),
                             new JProperty("groups", context.User?.Groups == null ? "no-groups" : string.Join(", ", context.User.Groups.Select(g => g.Id))),

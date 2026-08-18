@@ -40,6 +40,7 @@ type ProductEntity = {
 }
 
 type UsageStats = {
+  track: boolean
   consumed: number
   quota: number
   remaining: number
@@ -93,6 +94,7 @@ type AggregateStatsItem = {
   subscriptionId: string
   productName?: string
   state?: string
+  track?: boolean
   consumed?: number
   quota?: number
   remaining?: number
@@ -107,9 +109,10 @@ type SortableColumn = "userName" | "productName" | "subscriptionName" | "state" 
 
 type SortDirection = "asc" | "desc"
 
-type StatisticUpdateType = "cost" | "quota"
+type StatisticUpdateType = "cost" | "quota" | "track"
 
 type StatisticEditValues = {
+  track: boolean
   cost: string
   quota: string
 }
@@ -120,10 +123,9 @@ type UpdateMessage = {
 }
 
 type AggregateSummary = {
-  totalCost: number
-  totalInputTokens: number
-  totalOutputTokens: number
-  totalTokens: number
+  totalConsumed: number
+  totalQuota: number
+  totalRemaining: number
 }
 
 type ExternalRequest = ReturnType<typeof useExternalRequest>
@@ -195,9 +197,14 @@ function validateUsageStats(value: unknown): UsageStats {
     }
   }
 
-  const validatedStats = stats as UsageStats
+  if (stats.track !== undefined && typeof stats.track !== "boolean") {
+    throw new Error("Statistics response has an invalid track value")
+  }
+
+  const validatedStats = stats as Omit<UsageStats, "track"> & {track?: boolean}
   return {
     ...validatedStats,
+    track: validatedStats.track ?? true,
     pct: roundPercentage(validatedStats.quota > 0
       ? validatedStats.consumed / validatedStats.quota * 100
       : 0),
@@ -538,15 +545,13 @@ async function getInitialAndPagedCollection<T>(
 
 function summarizeUsageStats(items: AggregateStatsItem[]): AggregateSummary {
   return items.reduce<AggregateSummary>((summary, item) => ({
-    totalCost: summary.totalCost + (item.consumed ?? 0),
-    totalInputTokens: summary.totalInputTokens + (item.quota ?? 0),
-    totalOutputTokens: summary.totalOutputTokens + (item.remaining ?? 0),
-    totalTokens: summary.totalTokens + (item.pct ?? 0),
+    totalConsumed: summary.totalConsumed + (item.consumed ?? 0),
+    totalQuota: summary.totalQuota + (item.track === false ? 0 : (item.quota ?? 0)),
+    totalRemaining: summary.totalRemaining + (item.remaining ?? 0),
   }), {
-    totalCost: 0,
-    totalInputTokens: 0,
-    totalOutputTokens: 0,
-    totalTokens: 0,
+    totalConsumed: 0,
+    totalQuota: 0,
+    totalRemaining: 0,
   })
 }
 
@@ -606,7 +611,7 @@ const App = () => {
   const [isAllLoading, setIsAllLoading] = useState(true)
   const [currentUserStatisticsKey, setCurrentUserStatisticsKey] = useState<string | undefined>()
   const [editingSubscriptionId, setEditingSubscriptionId] = useState<string | undefined>()
-  const [statisticEditValues, setStatisticEditValues] = useState<StatisticEditValues>({cost: "", quota: ""})
+  const [statisticEditValues, setStatisticEditValues] = useState<StatisticEditValues>({cost: "", quota: "", track: true})
   const [updatingSubscriptionId, setUpdatingSubscriptionId] = useState<string | undefined>()
   const [updateMessage, setUpdateMessage] = useState<UpdateMessage | undefined>()
 
@@ -857,6 +862,7 @@ const App = () => {
                     subscriptionId: sub.name,
                     productName,
                     state: getSubscriptionState(sub),
+                    track: stats.track,
                     consumed: stats.consumed,
                     quota: stats.quota,
                     remaining: stats.remaining,
@@ -996,6 +1002,7 @@ const App = () => {
   const startEditingStatistics = useCallback((item: AggregateStatsItem) => {
     setEditingSubscriptionId(item.subscriptionId)
     setStatisticEditValues({
+      track: item.track ?? true,
       cost: item.consumed?.toString() ?? "",
       quota: item.quota?.toString() ?? "",
     })
@@ -1004,12 +1011,12 @@ const App = () => {
 
   const cancelEditingStatistics = useCallback(() => {
     setEditingSubscriptionId(undefined)
-    setStatisticEditValues({cost: "", quota: ""})
+    setStatisticEditValues({cost: "", quota: "", track: true})
   }, [])
 
   const saveStatistics = useCallback(async (item: AggregateStatsItem) => {
-    const updates: Array<{type: StatisticUpdateType; value: string}> = []
-    const fields: Array<{type: StatisticUpdateType; value: string; currentValue: number | undefined}> = [
+    const updates: Array<{type: StatisticUpdateType; value: number | boolean}> = []
+    const fields: Array<{type: "cost" | "quota"; value: string; currentValue: number | undefined}> = [
       {type: "cost", value: statisticEditValues.cost.trim(), currentValue: item.consumed},
       {type: "quota", value: statisticEditValues.quota.trim(), currentValue: item.quota},
     ]
@@ -1024,12 +1031,16 @@ const App = () => {
       }
 
       if (field.currentValue === undefined || numericValue !== field.currentValue) {
-        updates.push({type: field.type, value: field.value})
+        updates.push({type: field.type, value: numericValue})
       }
     }
 
+    if (item.track === undefined || statisticEditValues.track !== item.track) {
+      updates.push({type: "track", value: statisticEditValues.track})
+    }
+
     if (updates.length === 0) {
-      setUpdateMessage({kind: "error", text: "Change the cost or quota before saving."})
+      setUpdateMessage({kind: "error", text: "Change the cost, quota, or track setting before saving."})
       return
     }
 
@@ -1061,7 +1072,7 @@ const App = () => {
       }
 
       setEditingSubscriptionId(undefined)
-      setStatisticEditValues({cost: "", quota: ""})
+      setStatisticEditValues({cost: "", quota: "", track: true})
       setUpdateMessage({kind: "success", text: "Statistics updated successfully."})
       refresh()
     } catch (err) {
@@ -1165,21 +1176,22 @@ const App = () => {
               <span className="usage-summary-label">Active subscriptions</span>
               <strong>{formatNumber(sortedAllItems.filter(item => (
                 item.state?.toLowerCase() === "active"
+                && item.track !== false
                 && !item.error
                 && item.consumed !== undefined
               )).length, 0)}</strong>
             </div>
             <div className="usage-summary-card">
               <span className="usage-summary-label">Total consumed</span>
-              <strong>{formatNumber(aggregateSummary.totalCost, 2)}</strong>
+              <strong>{formatNumber(aggregateSummary.totalConsumed, 2)}</strong>
             </div>
             <div className="usage-summary-card">
               <span className="usage-summary-label">Total quota</span>
-              <strong>{formatNumber(aggregateSummary.totalInputTokens, 2)}</strong>
+              <strong>{formatNumber(aggregateSummary.totalQuota, 2)}</strong>
             </div>
             <div className="usage-summary-card">
               <span className="usage-summary-label">Total remaining</span>
-              <strong>{formatNumber(aggregateSummary.totalOutputTokens, 2)}</strong>
+              <strong>{formatNumber(aggregateSummary.totalRemaining, 2)}</strong>
             </div>
             <div className="usage-summary-card">
               <span className="usage-summary-label">Average usage %</span>
@@ -1195,6 +1207,7 @@ const App = () => {
                 <th><button className="usage-sort-button" onClick={() => toggleSort("productName")} type="button">Product Name {getSortIndicator("productName")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("subscriptionName")} type="button">Subscription Name {getSortIndicator("subscriptionName")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("state")} type="button">State {getSortIndicator("state")}</button></th>
+                <th>Track</th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("consumed")} type="button">Consumed {getSortIndicator("consumed")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("quota")} type="button">Quota {getSortIndicator("quota")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("remaining")} type="button">Remaining {getSortIndicator("remaining")}</button></th>
@@ -1210,6 +1223,17 @@ const App = () => {
                   <td>{item.productName ?? "-"}</td>
                   <td>{item.subscriptionName}</td>
                   <td>{item.state ?? "-"}</td>
+                  <td>
+                    {editingSubscriptionId === item.subscriptionId ? (
+                      <input
+                        aria-label={`Track usage for ${item.subscriptionName}`}
+                        checked={statisticEditValues.track}
+                        className="usage-edit-checkbox"
+                        onChange={event => setStatisticEditValues(current => ({...current, track: event.target.checked}))}
+                        type="checkbox"
+                      />
+                    ) : item.track === undefined ? "-" : item.track ? "Yes" : "No"}
+                  </td>
                   <td>
                     {editingSubscriptionId === item.subscriptionId ? (
                       <input

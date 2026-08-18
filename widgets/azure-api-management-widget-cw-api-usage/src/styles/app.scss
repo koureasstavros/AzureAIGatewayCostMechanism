@@ -412,6 +412,14 @@ textarea {
   }
 }
 
+.usage-edit-checkbox {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: #0078d4;
+  cursor: pointer;
+}
+
 .usage-row-actions {
   display: flex;
   gap: 6px;
