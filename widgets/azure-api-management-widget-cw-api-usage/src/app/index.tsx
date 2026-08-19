@@ -544,15 +544,20 @@ async function getInitialAndPagedCollection<T>(
 }
 
 function summarizeUsageStats(items: AggregateStatsItem[]): AggregateSummary {
-  return items.reduce<AggregateSummary>((summary, item) => ({
-    totalConsumed: summary.totalConsumed + (item.consumed ?? 0),
-    totalQuota: summary.totalQuota + (item.track === false ? 0 : (item.quota ?? 0)),
-    totalRemaining: summary.totalRemaining + (item.remaining ?? 0),
-  }), {
-    totalConsumed: 0,
-    totalQuota: 0,
-    totalRemaining: 0,
-  })
+  const totals = items
+    .filter(item => item.track !== false)
+    .reduce((summary, item) => ({
+      totalConsumed: summary.totalConsumed + (item.consumed ?? 0),
+      totalQuota: summary.totalQuota + (item.quota ?? 0),
+    }), {
+      totalConsumed: 0,
+      totalQuota: 0,
+    })
+
+  return {
+    ...totals,
+    totalRemaining: totals.totalQuota - totals.totalConsumed,
+  }
 }
 
 function compareNullableStrings(a: string | undefined, b: string | undefined): number {
@@ -930,13 +935,14 @@ const App = () => {
   }, [allItems])
 
   const averageUsagePct = useMemo<number | undefined>(() => {
-    const percentages = allItems
-      ?.map(item => item.pct)
-      .filter((value): value is number => value !== undefined)
-    if (!percentages?.length) return undefined
+    if (!aggregateSummary) return undefined
 
-    return roundPercentage(percentages.reduce((sum, value) => sum + value, 0) / percentages.length)
-  }, [allItems])
+    return roundPercentage(
+      aggregateSummary.totalQuota > 0
+        ? (aggregateSummary.totalConsumed / aggregateSummary.totalQuota) * 100
+        : 0,
+    )
+  }, [aggregateSummary])
 
   const sortedUsageItems = useMemo(() => {
     if (!items) return undefined
