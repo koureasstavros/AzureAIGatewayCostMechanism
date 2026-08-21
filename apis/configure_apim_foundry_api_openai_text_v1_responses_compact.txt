@@ -1,14 +1,14 @@
-OpenAI Text V1 Responses
+OpenAI Text V1 Responses Compact
 ---------------------------------------
 /openai/v1/responses
 ---------------------------------------
-<rewrite-uri template="/openai/v1/responses" copy-unmatched-params="false" />
+<rewrite-uri template="/openai/v1/responses/compact" copy-unmatched-params="false" />
 ---------------------------------------
 <policies>
     <inbound>
         <base />
-        <rewrite-uri template="/openai/v1/responses" copy-unmatched-params="false" />
-		<set-variable name="requestBody" value="@(context.Request.Body.As<string>(preserveContent: true))" />
+        <rewrite-uri template="/openai/v1/responses/compact" copy-unmatched-params="false" />
+        <set-variable name="requestBody" value="@(context.Request.Body.As<string>(preserveContent: true))" />
         <set-variable name="modelId" value="@{
             string raw = (string)context.Variables["requestBody"];
             if (string.IsNullOrWhiteSpace(raw))
@@ -21,32 +21,17 @@ OpenAI Text V1 Responses
             catch
             { return null; }
         }" />
-        <!-- Calculate current year-month -->
-        <set-variable name="yearMonth" value="@{
-            return DateTime.UtcNow.ToString("yyyy-MM");
-        }" />
-        <!-- Load current accumulated cost from cache -->
-        <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
-        <!-- Block if already over limit before even hitting the backend -->
-        <choose>
-            <when condition="@(Convert.ToDouble(context.Variables.GetValueOrDefault("storedCost", (object)0)) > 100)">
-                <return-response>
-                    <set-status code="429" reason="Cost Limit Exceeded" />
-                    <set-body>Cost quota exceeded</set-body>
-                </return-response>
-            </when>
-        </choose>
     </inbound>
     <backend>
         <base />
     </backend>
     <outbound>
         <base />
-		<!-- Calculate current year-month -->
+        <!-- Calculate current year-month -->
         <set-variable name="yearMonth" value="@{
             return DateTime.UtcNow.ToString("yyyy-MM");
         }" />
-        <!-- 1. Read body ONCE into a variable -->
+        <!-- 1. Read body ONCE into a string variable -->
         <set-variable name="responseBody" value="@(context.Response.Body.As<string>(preserveContent: true))" />
         <set-variable name="isStreamingResponse" value="@{
             string raw = (string)context.Variables["responseBody"];
@@ -105,7 +90,7 @@ OpenAI Text V1 Responses
             // No response.completed found — return empty object so downstream ?? defaults kick in
             return new JObject();
         }" />
-        <!-- 2. Extract token usage from the cached variable -->
+        <!-- 2. Extract token usage from the parsed (and now flat) response object -->
         <set-variable name="actualInputTokens" value="@{
             var body = (JObject)context.Variables["responseJson"];
             var inputTokens = body?["usage"]?["input_tokens"]?.Value<int>() ?? 0;
@@ -132,10 +117,10 @@ OpenAI Text V1 Responses
         <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
         <!-- 4. Cost rates -->
         <set-variable name="inputCostPerM" value="@{
-            var model = (string)context.Variables["modelId"];
+            var model = (string)context.Variables["modelId"];            
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
-			if (model.IndexOf("GPT54NANO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (model.IndexOf("GPT54NANO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 0.2; }
             if (model.IndexOf("GPT54MINI-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 0.75; }
@@ -177,7 +162,7 @@ OpenAI Text V1 Responses
             { return 0.1; }
             if (model.IndexOf("KIMIK26-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 0.16; }
-            return 1.0; // Default fallback           
+            return 1.0; // Default fallback            
         }" />
         <set-variable name="inputCachedWriteCostPerM" value="@{
             var model = (string)context.Variables["modelId"];
@@ -201,13 +186,13 @@ OpenAI Text V1 Responses
             { return 0.625; }
             if (model.IndexOf("KIMIK26-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 1.1875; }
-            return 6.25; // Default fallback           
+            return 6.25; // Default fallback          
         }" />
         <set-variable name="outputCostPerM" value="@{
-            var model = (string)context.Variables["modelId"];
+            var model = (string)context.Variables["modelId"];    
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
-			if (model.IndexOf("GPT54NANO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (model.IndexOf("GPT54NANO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 1.25; }
             if (model.IndexOf("GPT54MINI-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 4.5; }
@@ -250,8 +235,7 @@ OpenAI Text V1 Responses
         <set-variable name="currentCost" value="@{
             double inputCost = (double)context.Variables["inputCost"];
             double outputCost = (double)context.Variables["outputCost"];
-			double currentCost = inputCost + outputCost;
-            return currentCost;
+            return inputCost + outputCost;
         }" />
         <!-- 7. Increment counters -->
         <set-variable name="newCostTotal" value="@{
@@ -264,152 +248,120 @@ OpenAI Text V1 Responses
         }" />
         <!-- 8. Store updated counters back into cache (30 days) -->
         <cache-store-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newCostTotal"])" duration="2592000" />
+        <!-- 9. Store updated counters back into cache (30 days) -->
+        <emit-metric name="Request Correlation" value="1">
+            <dimension name="User ID" value="@(context.User?.Id)" />
+            <dimension name="User Email" value="@(context.User?.Email)" />
+            <dimension name="Product ID" value="@(context.Product.Id)" />
+            <dimension name="Product Name" value="@(context.Product.Name)" />
+            <dimension name="Subscription ID" value="@(context.Subscription?.Id)" />
+            <dimension name="Subscription Name" value="@(context.Subscription?.Name)" />
+            <dimension name="API ID" value="@(context.Api.Id)" />
+            <dimension name="Operation ID" value="@(context.Operation.Id)" />
+        </emit-metric>
+        <emit-metric name="Cost Correlation" value="@{
+                double v = 0.0;
+                if (context.Variables.ContainsKey("currentCost"))
+                { v = Convert.ToDouble(context.Variables["currentCost"]); }
+                return v;
+            }">
+            <dimension name="Subscription ID" value="@(context.Subscription?.Id)" />
+            <dimension name="API ID" value="@(context.Api.Id)" />
+            <dimension name="Operation ID" value="@(context.Operation.Id)" />
+            <dimension name="Status Code" value="@(context.Response.StatusCode.ToString())" />
+            <dimension name="Model ID" value="@(context.Variables.GetValueOrDefault("modelId",""))" />
+        </emit-metric>
     </outbound>
     <on-error>
         <base />
     </on-error>
 </policies>
 ---------------------------------------
-{"model":"<model-deployment>","input":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"How are you?"}]}
----------------------------------------
 {
-    "id": "resp_019391a5d9091984006a3e4fbd97488197908d51ab5106c6f5",
-    "object": "response",
-    "created_at": 1782468541,
-    "status": "completed",
-    "background": false,
-    "completed_at": 1782468543,
-    "content_filters": [
+    "model":"{{openai_model_text}}",
+    "input":
+    [
         {
-            "blocked": false,
-            "source_type": "prompt",
-            "content_filter_raw": [],
-            "content_filter_results": {
-                "hate": {
-                    "filtered": false,
-                    "severity": "safe"
-                },
-                "sexual": {
-                    "filtered": false,
-                    "severity": "safe"
-                },
-                "violence": {
-                    "filtered": false,
-                    "severity": "safe"
-                },
-                "self_harm": {
-                    "filtered": false,
-                    "severity": "safe"
-                },
-                "jailbreak": {
-                    "detected": false,
-                    "filtered": false
-                }
-            },
-            "content_filter_offsets": {
-                "start_offset": 0,
-                "end_offset": 844,
-                "check_offset": 0
-            }
+            "role":"system",
+            "content":"You are a helpful assistant"
         },
         {
-            "blocked": false,
-            "source_type": "completion",
-            "content_filter_raw": [],
-            "content_filter_results": {
-                "protected_material_text": {
-                    "detected": false,
-                    "filtered": false
-                },
-                "protected_material_code": {
-                    "detected": false,
-                    "filtered": false
-                },
-                "hate": {
-                    "filtered": false,
-                    "severity": "safe"
-                },
-                "sexual": {
-                    "filtered": false,
-                    "severity": "safe"
-                },
-                "violence": {
-                    "filtered": false,
-                    "severity": "safe"
-                },
-                "self_harm": {
-                    "filtered": false,
-                    "severity": "safe"
-                }
-            },
-            "content_filter_offsets": {
-                "start_offset": 0,
-                "end_offset": 52,
-                "check_offset": 0
-            }
+            "role":"user",
+            "content":"How are you?"
         }
     ],
-    "error": null,
-    "frequency_penalty": 0.0,
-    "incomplete_details": null,
-    "instructions": null,
-    "max_output_tokens": null,
-    "max_tool_calls": null,
-    "model": "GPT54-GS",
-    "moderation": null,
+    "previous_response_id": "resp_0e129915c9934e48006a88441cacb48195a13a58ba10892645"
+}
+---------------------------------------
+{
+    "id": "resp_0e129915c9934e48016a88442dd5e08195a874609bd796171b",
+    "object": "response.compaction",
+    "created_at": 1787315247,
     "output": [
         {
-            "id": "msg_019391a5d9091984006a3e4fbeb1788197adb34f06a8607339",
+            "id": "msg_0e129915c9934e48006a88441cb01881959ad76461195f01be",
             "type": "message",
             "status": "completed",
             "content": [
                 {
-                    "type": "output_text",
-                    "annotations": [],
-                    "logprobs": [],
-                    "text": "I'm doing well, thanks — ready to help. How are you?"
+                    "type": "input_text",
+                    "text": "You are a helpful assistant"
                 }
             ],
-            "phase": "final_answer",
-            "role": "assistant"
+            "role": "system"
+        },
+        {
+            "id": "msg_0e129915c9934e48006a88441cb03c81958396fc13a57466e4",
+            "type": "message",
+            "status": "completed",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "What I asked before?"
+                }
+            ],
+            "role": "user"
+        },
+        {
+            "id": "msg_0e129915c9934e48016a88442ddacc819596a972eedccf83a1",
+            "type": "message",
+            "status": "completed",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "You are a helpful assistant"
+                }
+            ],
+            "role": "system"
+        },
+        {
+            "id": "msg_0e129915c9934e48016a88442ddafc819583feac062cbc2dbe",
+            "type": "message",
+            "status": "completed",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "How are you?"
+                }
+            ],
+            "role": "user"
+        },
+        {
+            "id": "cmp_0e129915c9934e48016a88442e9e588195928e09e1478bad8b",
+            "type": "compaction",
+            "encrypted_content": "gAAAAABqiEQv-9taEX-_4PHKqmKNPuKVIP-JdLRhdxJEv2Jca5kh9MDrmZ-Ktat77S36Oa9liX-bUPmQYvge4t76OK93J9M2Qbkc8QyM_c-l-GA6tPDB61OzBHhGGC254Tr2uCaCXim2eQ3bzt4QOaiYZlkG0kXy5N4Yci2z9qLfm5AmfbhYYHBkpe40MErqtXH1BPX_I7xic9A0xsUr9j5VtZkDVCUMcZCsyD4IcvX2NZMWmGowDFjy4o29q7EPuHYxzB7u3pEfhUfNQz4oFws0Iw1VIBPL9W8um8rMpxkbORguXhZlYq3S2HyzzWwbAcDpVGkP6_Kr-4Vp0mxsJKnxD6V3mOoedYU5Wzj_eTXzDlKH6VXzJICU0YpZZD8BGU74Ga73_-G9gCJHB0UU-Ep6_NAdFl_vwROPiBMN3UsYsIuG6Ll2cjMi_bXV7u6l3_s6NkUn5L-KXPKC-qpNlDp0WaVnzK-M6P4JE9ye-GdzfEXzQHFlwKusdz0lPI41mvTn-yyfI9fLSSCKmkifCynpPNrGPI_reWi_videzZl_Jg0oxSpEh4wQdcdx9nV6EAAv4jdUXOTYOpHVjs8hG9qLlwzdm2wSDeCcvICHtJOItel-_qOj8n3IMCIHR271T5oDPIf-0NMEJ9yljgsctz4DQmDA5Ao1StI33HelmArtce7iwozS3w3iQ-SO2-YjgNqtx3gizCx-tsvQdrxT8yk6_Ep46QTJ7aBAIyDr8raL--xzXhVWT6IPI-fZ44yzwooCGCtPr9HAFTHjJJHO8bIrAw6lhnrMQ2e_yCxG9XLHbpG9OApCQ1QdyeZN0wxRrBCqvEhl8JmrBMVUYbWX4HahBBHpOZlw54G_DxZjIiko-79bCkEaMscVVnwdx7vcEOGiZCbx3lCay3M-BgNi20oduHAuwYN7rjsiqhtc00G0OccIpuT6L2Fiz8on-v3wIs3VNIJGgkkRB6fmopM0AxLMzAf4SQ6Ylh2-r7S7uLwb5QbktQ4ZM7w2wnbSNMPm2qERmXw94c5GNyIZ9NBRX6m83ZD7JJUMImgbEsNYGR5ub2Y7DomFeOD35zvXVGJEPZZ9W2w-qBTaz1sF4CTc09Rtl2ZiWji3XehqhRfFYAjD7YsSrFPh--alMSYnl0Rz9UqEEj1hCKnaa7U69NbfyqF5laWgm5CDEOYMawwNTg6OLOVAqPdC_IwcTofgh67K3fBJna5As-bufKZlq69c_--AfaMl9epvXMnWN2bCAPgG1DwO5RuzIydKf93DDDB0IjbeWZjMUgGCcY-RKN5GKredwkYUDiu_4g=="
         }
     ],
-    "parallel_tool_calls": true,
-    "presence_penalty": 0.0,
-    "previous_response_id": null,
-    "prompt_cache_key": null,
-    "prompt_cache_retention": "in_memory",
-    "reasoning": {
-        "context": null,
-        "effort": "none",
-        "summary": null
-    },
-    "safety_identifier": null,
-    "service_tier": "default",
-    "store": true,
-    "temperature": 1.0,
-    "text": {
-        "format": {
-            "type": "text"
-        },
-        "verbosity": "medium"
-    },
-    "tool_choice": "auto",
-    "tools": [],
-    "top_logprobs": 0,
-    "top_p": 0.98,
-    "truncation": "disabled",
     "usage": {
-        "input_tokens": 19,
+        "input_tokens": 96,
         "input_tokens_details": {
+            "cache_write_tokens": 0,
             "cached_tokens": 0
         },
-        "output_tokens": 18,
+        "output_tokens": 113,
         "output_tokens_details": {
             "reasoning_tokens": 0
         },
-        "total_tokens": 37
-    },
-    "user": null,
-    "metadata": {}
+        "total_tokens": 209
+    }
 }

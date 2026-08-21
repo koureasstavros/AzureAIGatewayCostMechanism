@@ -1,0 +1,23 @@
+OpenAI Text Responses Cancel
+---------------------------------------
+/openai/responses/{response_id}/cancel?api-version={api-version}
+---------------------------------------
+<set-variable name="responseId" value="@(context.Request.MatchedParameters["response_id"])" />
+<rewrite-uri template="@($"/openai/responses/{context.Variables["responseId"]}/cancel")" copy-unmatched-params="false" />
+---------------------------------------
+<policies>
+    <inbound>
+        <base />
+        <set-variable name="responseId" value="@(context.Request.MatchedParameters["response_id"])" />
+        <rewrite-uri template="@($"/openai/responses/{context.Variables["responseId"]}/cancel")" copy-unmatched-params="false" />
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>
