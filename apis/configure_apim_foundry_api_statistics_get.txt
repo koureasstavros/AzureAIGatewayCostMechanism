@@ -40,19 +40,19 @@ Generic Statistics
         <choose>
             <when condition="@(context.Variables.ContainsKey("storedTrack") == false)">
                 <cache-store-value key="@($"quota/{context.Subscription.Id}/track/permanent")" value="true" duration="2147483647" caching-type="external" />
-                <set-variable name="storedTrack" value="true" />
+                <set-variable name="storedTrack" value="@(true)" />
             </when>
         </choose>
         <choose>
             <when condition="@(context.Variables.ContainsKey("storedCost") == false)">
                 <cache-store-value key="@($"quota/{context.Subscription.Id}/cost/{context.Variables["yearMonth"]}")" value="0" duration="2592000" caching-type="external" />
-                <set-variable name="storedCost" value="0" />
+                <set-variable name="storedCost" value="@((double)0)" />
             </when>
         </choose>
         <choose>
             <when condition="@(context.Variables.ContainsKey("storedQuota") == false)">
                 <cache-store-value key="@($"quota/{context.Subscription.Id}/quota/{context.Variables["yearMonth"]}")" value="100" duration="2592000" caching-type="external" />
-                <set-variable name="storedQuota" value="100" />
+                <set-variable name="storedQuota" value="@((double)100)" />
             </when>
         </choose>
         <return-response>

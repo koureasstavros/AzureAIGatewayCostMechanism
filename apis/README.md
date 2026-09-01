@@ -1,6 +1,6 @@
 # API Configuration Notes
 
-This document describes where each API operation expects the model to be specified.
+This section describes where each API operation expects the model to be specified.
 
 ## OpenAI Completions
 
@@ -37,3 +37,15 @@ This document describes where each API operation expects the model to be specifi
 
 - **Anthropic Messages:** The model is specified in the request body.
 - **Anthropic V1 Messages:** The model is specified in the request body.
+
+
+
+# API Variable Notes
+
+This section describes how variables should be specified and handled
+
+APIM retrieves and stores the variables as strings but the binary object in cache will be different.
+
+- "true" or "0" are not true strings
+
+- "@(true)" or "@((double)0)" are true strings

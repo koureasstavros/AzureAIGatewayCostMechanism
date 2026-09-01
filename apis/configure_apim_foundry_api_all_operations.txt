@@ -6,10 +6,25 @@
             return DateTime.UtcNow.ToString("yyyy-MM");
         }" />
         <!-- Load current accumulated cost from cache -->
-        <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
+        <cache-lookup-value key="@($"quota/{context.Subscription.Id}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" caching-type="external" />
+        <!-- Load current accumulated quota from cache -->
+        <cache-lookup-value key="@($"quota/{context.Subscription.Id}/quota/{context.Variables["yearMonth"]}")" variable-name="storedQuota" caching-type="external" />
         <!-- Block if already over limit before even hitting the backend -->
+        <set-variable name="quotaExceeded" value="@{
+            var costRaw = context.Variables.GetValueOrDefault<object>("storedCost", null);
+            var quotaRaw = context.Variables.GetValueOrDefault<object>("storedQuota", null);
+            double cost = costRaw != null ? Convert.ToDouble(costRaw) : 0;
+            double quota = quotaRaw != null ? Convert.ToDouble(quotaRaw) : 100;
+            return cost >= quota;
+        }" />
         <choose>
-            <when condition="@(Convert.ToDouble(context.Variables.GetValueOrDefault("storedCost", (object)0)) > 100)">
+            <when condition="@(context.Subscription == null)">
+                <return-response>
+                    <set-status code="401" reason="Subscription Required" />
+                    <set-body>A valid subscription key is required for tracking.</set-body>
+                </return-response>
+            </when>
+            <when condition="@(Convert.ToBoolean(context.Variables["quotaExceeded"]))">
                 <return-response>
                     <set-status code="429" reason="Cost Limit Exceeded" />
                     <set-body>Cost quota exceeded</set-body>
