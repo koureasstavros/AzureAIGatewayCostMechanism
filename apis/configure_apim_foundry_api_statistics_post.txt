@@ -31,8 +31,9 @@ Generic Statistics
 		<set-variable name="yearMonth" value="@{
             return DateTime.UtcNow.ToString("yyyy-MM");
         }" />
-		<!-- Optional but recommended: make sure the caller can only write their OWN subscription's cost -->
+		<!-- Choose which parameter to store / update -->
 		<choose>
+			<!-- Optional but recommended: make sure the caller can only write their OWN subscription's cost -->
 			<when condition="@(context.Subscription.Id == "master" || context.User?.Id == "administrator" || (context.User?.Groups?.Any(g => g.Id == "administrators" || g.Id == "contributors") ?? false))">
 				<choose>
 					<when condition="@((string)context.Variables["type"] == "track")">

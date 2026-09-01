@@ -36,6 +36,7 @@ Generic Statistics
         <cache-lookup-value key="@($"quota/{context.Subscription.Id}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" caching-type="external" />
         <!-- Load current accumulated quota from cache -->
         <cache-lookup-value key="@($"quota/{context.Subscription.Id}/quota/{context.Variables["yearMonth"]}")" variable-name="storedQuota" caching-type="external" />
+        <!-- Initiate each parameter with default value -->
         <choose>
             <when condition="@(context.Variables.ContainsKey("storedTrack") == false)">
                 <cache-store-value key="@($"quota/{context.Subscription.Id}/track/permanent")" value="true" duration="2147483647" caching-type="external" />
