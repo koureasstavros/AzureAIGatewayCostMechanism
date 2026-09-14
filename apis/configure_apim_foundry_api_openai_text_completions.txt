@@ -221,6 +221,12 @@ OpenAI Text Completions
             { return 0.5; }
             if (model.IndexOf("KIMIK26-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 0.95; }
+            if (model.IndexOf("GROK46-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 2.0; }
+            if (model.IndexOf("DEEPSEEKV4FLASH-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.19; }
+            if (model.IndexOf("DEEPSEEKV4PRO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 1.74; }
             return 5.0; // Default fallback
         }" />
         <set-variable name="inputCachedReadCostPerM" value="@{
@@ -245,6 +251,12 @@ OpenAI Text Completions
             { return 0.1; }
             if (model.IndexOf("KIMIK26-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 0.16; }
+            if (model.IndexOf("GROK46-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.5; }
+            if (model.IndexOf("DEEPSEEKV4FLASH-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.028; }
+            if (model.IndexOf("DEEPSEEKV4PRO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.145; }
             return 1.0; // Default fallback             
         }" />
         <set-variable name="inputCachedWriteCostPerM" value="@{
@@ -269,6 +281,12 @@ OpenAI Text Completions
             { return 0.625; }
             if (model.IndexOf("KIMIK26-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 1.1875; }
+            if (model.IndexOf("GROK46-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 2.5; }
+            if (model.IndexOf("DEEPSEEKV4FLASH-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.0; }
+            if (model.IndexOf("DEEPSEEKV4PRO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return  0.0; }
             return 6.25; // Default fallback           
         }" />
         <set-variable name="outputCostPerM" value="@{
@@ -287,12 +305,18 @@ OpenAI Text Completions
             { return 6.0; }
             if (model.IndexOf("GPT56TERRA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 15.0; }
-            if (model.IndexOf("GPT55SOL-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (model.IndexOf("GPT56SOL-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 30.0; }
             if (model.IndexOf("KIMIK25-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 2.8; }
             if (model.IndexOf("KIMIK26-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 4.0; }
+            if (model.IndexOf("GROK46-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 6.0; }
+            if (model.IndexOf("DEEPSEEKV4FLASH-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 0.51; }
+            if (model.IndexOf("DEEPSEEKV4PRO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            { return 3.48; }
             return 30.0; // Default fallback
         }" />
         <!-- 5. Calculate cost -->
