@@ -1,6 +1,6 @@
 ---
 language: ["en"]
-tags: ["ai", "foundry", "apim", "azure", "policy", "control", "report", "budget"]
+tags: ["ai", "azure", "gateway", "foundry", "apim", "policy", "control", "report", "budget", "user-cost"]
 license: "apache-2.0"
 version: v0.0.27
 ---
@@ -21,7 +21,7 @@ This project is freely available to everyone, but your support as a sponsor can 
 
 [🏷️ Sponshor this Project through GitHub](https://github.com/sponsors/koureasstavros) --and let your support shine through GitHub.
 
-[🏷️ Sponshor this Project through PayPal](https://www.paypal.com/donate/?hosted_button_id=E6E5D545H683E) --If you're looking for a donation platform other than GitHub.
+[🏷️ Sponshor this Project through PayPal](https://www.paypal.com/donate/?hosted_button_id=8NSHM6WUHGB3N) --If you're looking for a donation platform other than GitHub.
 
 
 ## ✨ Capabilities
