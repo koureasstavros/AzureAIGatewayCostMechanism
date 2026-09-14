@@ -2,14 +2,12 @@
 language: ["en"]
 tags: ["ai", "azure", "gateway", "foundry", "apim", "policy", "control", "report", "budget", "user-cost"]
 license: "apache-2.0"
-version: v0.0.27
+version: v0.0.31
 ---
 
 # 💸 Azure AI Gateway Cost Mechanism
 
   - Cost control and reporting objects for **Azure AI Gateway** across **Azure Foundry** and **Azure API Management (APIM)**.
-
-![AIGateway](material/gateway.png)
 
 ## 🧠 Description
 
@@ -27,6 +25,8 @@ This project is freely available to everyone, but your support as a sponsor can 
 ## ✨ Capabilities
 
 The repository includes assets to configure operations and reporting for Azure AI Gateway cost tracking.
+
+![AIGateway](material/gateway.png)
 
 It is designed to help AI administrators:
 
