@@ -2,7 +2,7 @@
 language: ["en"]
 tags: ["ai", "azure", "gateway", "foundry", "apim", "policy", "control", "report", "budget", "user-cost"]
 license: "apache-2.0"
-version: v0.0.32
+version: v0.0.33
 ---
 
 # 💸 Azure AI Gateway Cost Mechanism
