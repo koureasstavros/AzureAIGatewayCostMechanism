@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.34 - 2026-09-23
+
+- Added reset data field into policies and widget which will be used for populating quota for initiating new period
+
 ## v0.0.33 - 2026-09-16
 
 - Added missing changelog and license file

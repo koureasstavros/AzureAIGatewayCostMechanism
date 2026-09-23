@@ -34,6 +34,8 @@ Generic Statistics
         <cache-lookup-value key="@($"quota/{context.Subscription.Id}/track/permanent")" variable-name="storedTrack" caching-type="external" />
         <!-- Load current accumulated cost from cache -->
         <cache-lookup-value key="@($"quota/{context.Subscription.Id}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" caching-type="external" />
+        <!-- Load current accumulated reset from cache -->
+        <cache-lookup-value key="@($"quota/{context.Subscription.Id}/reset/permanent")" variable-name="storedReset" caching-type="external" />
         <!-- Load current accumulated quota from cache -->
         <cache-lookup-value key="@($"quota/{context.Subscription.Id}/quota/{context.Variables["yearMonth"]}")" variable-name="storedQuota" caching-type="external" />
         <!-- Initiate each parameter with default value -->
@@ -50,9 +52,15 @@ Generic Statistics
             </when>
         </choose>
         <choose>
+            <when condition="@(context.Variables.ContainsKey("storedReset") == false)">
+                <cache-store-value key="@($"quota/{context.Subscription.Id}/reset/permanent")" value="@((double)100)" duration="2147483647" caching-type="external" />
+                <set-variable name="storedReset" value="100" />
+            </when>
+        </choose>
+        <choose>
             <when condition="@(context.Variables.ContainsKey("storedQuota") == false)">
-                <cache-store-value key="@($"quota/{context.Subscription.Id}/quota/{context.Variables["yearMonth"]}")" value="100" duration="2592000" caching-type="external" />
-                <set-variable name="storedQuota" value="@((double)100)" />
+                <cache-store-value key="@($"quota/{context.Subscription.Id}/quota/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["storedReset"])" duration="2592000" caching-type="external" />
+                <set-variable name="storedQuota" value="@((double)context.Variables["storedReset"])" />
             </when>
         </choose>
         <return-response>
@@ -63,12 +71,14 @@ Generic Statistics
             <set-body>@{
                 var track      = Convert.ToBoolean(context.Variables.GetValueOrDefault("storedTrack", (object)true));
                 var consumed   = Convert.ToDouble(context.Variables.GetValueOrDefault("storedCost", (object)0));
+                var reset      = Convert.ToDouble(context.Variables.GetValueOrDefault("storedReset", (object)0));
                 var quota      = Convert.ToDouble(context.Variables.GetValueOrDefault("storedQuota", (object)0));
                 var remaining  = Convert.ToDouble(quota - consumed);
                 var pct        = quota > 0 ? (double)Math.Round((double)consumed / quota * 100) : 0;
                 return Newtonsoft.Json.JsonConvert.SerializeObject(new {
                     track = track,
                     consumed  = consumed,
+                    reset = reset,
                     quota = quota,
                     remaining = remaining,
                     pct = pct

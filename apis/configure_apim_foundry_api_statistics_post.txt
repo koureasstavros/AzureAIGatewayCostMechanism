@@ -23,7 +23,7 @@ Generic Statistics
 				<header>Content-Length</header>
 			</expose-headers>
 		</cors>
-		<!-- Expect JSON body: { "subscriptionId": "abc123", "type": "cost|quota|track", "value": 42.5|true } -->
+		<!-- Expect JSON body: { "subscriptionId": "abc123", "type": "track|cost|reset|quota", "value": 42.5|true } -->
 		<set-variable name="body" value="@(context.Request.Body.As<JObject>(preserveContent: true))" />
 		<set-variable name="subId" value="@(((JObject)context.Variables["body"])["subscriptionId"].ToString())" />
 		<set-variable name="type" value="@(((JObject)context.Variables["body"])["type"].ToString())" />
@@ -43,6 +43,10 @@ Generic Statistics
 					<when condition="@((string)context.Variables["type"] == "cost")">
 						<set-variable name="newValue" value="@(((JObject)context.Variables["body"])["value"].Value<double>())" />
 						<cache-store-value key="@($"quota/{context.Variables["subId"]}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newValue"])" duration="2592000" caching-type="external" />
+					</when>
+					<when condition="@((string)context.Variables["type"] == "reset")">
+						<set-variable name="newValue" value="@(((JObject)context.Variables["body"])["value"].Value<double>())" />
+						<cache-store-value key="@($"quota/{context.Variables["subId"]}/reset/permanent")" value="@((double)context.Variables["newValue"])" duration="2147483647" caching-type="external" />
 					</when>
 					<when condition="@((string)context.Variables["type"] == "quota")">
 						<set-variable name="newValue" value="@(((JObject)context.Variables["body"])["value"].Value<double>())" />

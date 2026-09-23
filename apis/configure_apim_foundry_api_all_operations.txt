@@ -7,14 +7,18 @@
         }" />
         <!-- Load current accumulated cost from cache -->
         <cache-lookup-value key="@($"quota/{context.Subscription.Id}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" caching-type="external" />
+        <!-- Load current accumulated reset from cache -->
+        <cache-lookup-value key="@($"quota/{context.Subscription.Id}/reset/permanent")" variable-name="storedReset" caching-type="external" />
         <!-- Load current accumulated quota from cache -->
         <cache-lookup-value key="@($"quota/{context.Subscription.Id}/quota/{context.Variables["yearMonth"]}")" variable-name="storedQuota" caching-type="external" />
         <!-- Block if already over limit before even hitting the backend -->
         <set-variable name="quotaExceeded" value="@{
             var costRaw = context.Variables.GetValueOrDefault<object>("storedCost", null);
+            var resetRaw = context.Variables.GetValueOrDefault<object>("storedReset", null);
             var quotaRaw = context.Variables.GetValueOrDefault<object>("storedQuota", null);
             double cost = costRaw != null ? Convert.ToDouble(costRaw) : 0;
-            double quota = quotaRaw != null ? Convert.ToDouble(quotaRaw) : 100;
+            double reset = resetRaw != null ? Convert.ToDouble(resetRaw) : 100;
+            double quota = quotaRaw != null ? Convert.ToDouble(quotaRaw) : reset;
             return cost >= quota;
         }" />
         <choose>

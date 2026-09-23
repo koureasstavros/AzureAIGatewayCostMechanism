@@ -42,6 +42,7 @@ type ProductEntity = {
 type UsageStats = {
   track: boolean
   consumed: number
+  reset?: number
   quota: number
   remaining: number
   pct: number
@@ -96,6 +97,7 @@ type AggregateStatsItem = {
   state?: string
   track?: boolean
   consumed?: number
+  reset?: number
   quota?: number
   remaining?: number
   pct?: number
@@ -105,15 +107,16 @@ type AggregateStatsItem = {
 
 type TabKey = "mine" | "all"
 
-type SortableColumn = "userName" | "productName" | "subscriptionName" | "state" | "track" | "consumed" | "quota" | "remaining" | "pct"
+type SortableColumn = "userName" | "productName" | "subscriptionName" | "state" | "track" | "consumed" | "reset" | "quota" | "remaining" | "pct"
 
 type SortDirection = "asc" | "desc"
 
-type StatisticUpdateType = "cost" | "quota" | "track"
+type StatisticUpdateType = "cost" | "quota" | "reset" | "track"
 
 type StatisticEditValues = {
   track: boolean
   cost: string
+  reset: string
   quota: string
 }
 
@@ -199,6 +202,10 @@ function validateUsageStats(value: unknown): UsageStats {
 
   if (stats.track !== undefined && typeof stats.track !== "boolean") {
     throw new Error("Statistics response has an invalid track value")
+  }
+
+  if (stats.reset !== undefined && (typeof stats.reset !== "number" || !Number.isFinite(stats.reset))) {
+    throw new Error("Statistics response has an invalid reset value")
   }
 
   const validatedStats = stats as Omit<UsageStats, "track"> & {track?: boolean}
@@ -616,7 +623,7 @@ const App = () => {
   const [isAllLoading, setIsAllLoading] = useState(true)
   const [currentUserStatisticsKey, setCurrentUserStatisticsKey] = useState<string | undefined>()
   const [editingSubscriptionId, setEditingSubscriptionId] = useState<string | undefined>()
-  const [statisticEditValues, setStatisticEditValues] = useState<StatisticEditValues>({cost: "", quota: "", track: true})
+  const [statisticEditValues, setStatisticEditValues] = useState<StatisticEditValues>({cost: "", reset: "", quota: "", track: true})
   const [updatingSubscriptionId, setUpdatingSubscriptionId] = useState<string | undefined>()
   const [updateMessage, setUpdateMessage] = useState<UpdateMessage | undefined>()
 
@@ -869,6 +876,7 @@ const App = () => {
                     state: getSubscriptionState(sub),
                     track: stats.track,
                     consumed: stats.consumed,
+                    reset: stats.reset,
                     quota: stats.quota,
                     remaining: stats.remaining,
                     pct: stats.pct,
@@ -973,6 +981,8 @@ const App = () => {
             return Number(left.track ?? false) - Number(right.track ?? false)
           case "consumed":
             return compareNullableNumbers(left.consumed, right.consumed)
+          case "reset":
+            return compareNullableNumbers(left.reset, right.reset)
           case "quota":
             return compareNullableNumbers(left.quota, right.quota)
           case "remaining":
@@ -1012,6 +1022,7 @@ const App = () => {
     setStatisticEditValues({
       track: item.track ?? true,
       cost: item.consumed?.toString() ?? "",
+      reset: item.reset?.toString() ?? "",
       quota: item.quota?.toString() ?? "",
     })
     setUpdateMessage(undefined)
@@ -1019,13 +1030,14 @@ const App = () => {
 
   const cancelEditingStatistics = useCallback(() => {
     setEditingSubscriptionId(undefined)
-    setStatisticEditValues({cost: "", quota: "", track: true})
+    setStatisticEditValues({cost: "", reset: "", quota: "", track: true})
   }, [])
 
   const saveStatistics = useCallback(async (item: AggregateStatsItem) => {
     const updates: Array<{type: StatisticUpdateType; value: number | boolean}> = []
-    const fields: Array<{type: "cost" | "quota"; value: string; currentValue: number | undefined}> = [
+    const fields: Array<{type: "cost" | "reset" | "quota"; value: string; currentValue: number | undefined}> = [
       {type: "cost", value: statisticEditValues.cost.trim(), currentValue: item.consumed},
+      {type: "reset", value: statisticEditValues.reset.trim(), currentValue: item.reset},
       {type: "quota", value: statisticEditValues.quota.trim(), currentValue: item.quota},
     ]
 
@@ -1034,7 +1046,8 @@ const App = () => {
 
       const numericValue = Number(field.value)
       if (!Number.isFinite(numericValue) || numericValue < 0) {
-        setUpdateMessage({kind: "error", text: `${field.type === "cost" ? "Cost" : "Quota"} must be a non-negative number.`})
+        const fieldName = field.type === "cost" ? "Cost" : field.type === "quota" ? "Quota" : "Reset"
+        setUpdateMessage({kind: "error", text: `${fieldName} must be a non-negative number.`})
         return
       }
 
@@ -1048,7 +1061,7 @@ const App = () => {
     }
 
     if (updates.length === 0) {
-      setUpdateMessage({kind: "error", text: "Change the cost, quota, or track setting before saving."})
+      setUpdateMessage({kind: "error", text: "Change the cost, quota, reset, or track setting before saving."})
       return
     }
 
@@ -1080,7 +1093,7 @@ const App = () => {
       }
 
       setEditingSubscriptionId(undefined)
-      setStatisticEditValues({cost: "", quota: "", track: true})
+      setStatisticEditValues({cost: "", reset: "", quota: "", track: true})
       setUpdateMessage({kind: "success", text: "Statistics updated successfully."})
       refresh()
     } catch (err) {
@@ -1217,6 +1230,7 @@ const App = () => {
                 <th><button className="usage-sort-button" onClick={() => toggleSort("state")} type="button">State {getSortIndicator("state")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("track")} type="button">Track {getSortIndicator("track")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("consumed")} type="button">Consumed {getSortIndicator("consumed")}</button></th>
+                <th><button className="usage-sort-button" onClick={() => toggleSort("reset")} type="button">Reset {getSortIndicator("reset")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("quota")} type="button">Quota {getSortIndicator("quota")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("remaining")} type="button">Remaining {getSortIndicator("remaining")}</button></th>
                 <th><button className="usage-sort-button" onClick={() => toggleSort("pct")} type="button">Usage {getSortIndicator("pct")}</button></th>
@@ -1254,6 +1268,19 @@ const App = () => {
                         value={statisticEditValues.cost}
                       />
                     ) : formatOptionalNumber(item.consumed, 2)}
+                  </td>
+                  <td>
+                    {editingSubscriptionId === item.subscriptionId ? (
+                      <input
+                        aria-label={`Reset value for ${item.subscriptionName}`}
+                        className="usage-edit-input"
+                        min="0"
+                        onChange={event => setStatisticEditValues(current => ({...current, reset: event.target.value}))}
+                        step="0.01"
+                        type="number"
+                        value={statisticEditValues.reset}
+                      />
+                    ) : formatOptionalNumber(item.reset, 2)}
                   </td>
                   <td>
                     {editingSubscriptionId === item.subscriptionId ? (
