@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.35 - 2026-09-24
+
+- Added bullet color indicator for subscriptions both into personal and all statistics to easily track high used subscriptions
+
 ## v0.0.34 - 2026-09-23
 
 - Added reset data field into policies and widget which will be used for populating quota for initiating new period

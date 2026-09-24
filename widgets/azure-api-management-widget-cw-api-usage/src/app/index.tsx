@@ -328,10 +328,14 @@ function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
+function usageStatus(pct: number): {className: string; label: string} {
+  if (pct >= 90) return {className: "high", label: "Near quota"}
+  if (pct >= 50) return {className: "warn", label: "Moderate usage"}
+  return {className: "low", label: "Below half of quota"}
+}
+
 function barClassName(pct: number): string {
-  if (pct >= 90) return "usage-bar-fill high"
-  if (pct >= 70) return "usage-bar-fill warn"
-  return "usage-bar-fill"
+  return `usage-bar-fill ${usageStatus(pct).className}`
 }
 
 function getSubscriptionKey(sub: SubscriptionEntity): string | undefined {
@@ -1122,7 +1126,17 @@ const App = () => {
         {sortedUsageItems.map(item => (
           <div className="usage-card" key={item.subscriptionId}>
             <div className="usage-card-header">
-              <h4>{item.subscriptionName}</h4>
+              <h4>
+                {item.stats ? (
+                  <span
+                    aria-label={`${usageStatus(item.stats.pct).label}: ${item.stats.pct.toFixed(PERCENTAGE_DECIMAL_PLACES)}% of quota used`}
+                    className={`usage-status-indicator ${usageStatus(item.stats.pct).className}`}
+                    role="img"
+                    title={usageStatus(item.stats.pct).label}
+                  />
+                ) : null}
+                {item.subscriptionName}
+              </h4>
               {item.state && item.state !== "active" ? <span className="usage-badge">{item.state}</span> : null}
             </div>
             {item.productName ? <div className="usage-subtitle">Product Name: {item.productName}</div> : null}
@@ -1296,7 +1310,21 @@ const App = () => {
                     ) : formatOptionalNumber(item.quota, 2)}
                   </td>
                   <td>{formatOptionalNumber(item.remaining, 2)}</td>
-                  <td>{formatOptionalNumber(item.pct, PERCENTAGE_DECIMAL_PLACES, "%")}</td>
+                  <td>
+                    {item.pct === undefined ? (
+                      formatOptionalNumber(item.pct, PERCENTAGE_DECIMAL_PLACES, "%")
+                    ) : (
+                      <span className="usage-table-status">
+                        <span
+                          aria-label={`${usageStatus(item.pct).label}: ${item.pct.toFixed(PERCENTAGE_DECIMAL_PLACES)}% of quota used`}
+                          className={`usage-status-indicator ${usageStatus(item.pct).className}`}
+                          role="img"
+                          title={usageStatus(item.pct).label}
+                        />
+                        {formatOptionalNumber(item.pct, PERCENTAGE_DECIMAL_PLACES, "%")}
+                      </span>
+                    )}
+                  </td>
                   <td>
                     <div className="usage-row-actions">
                       {editingSubscriptionId === item.subscriptionId ? (

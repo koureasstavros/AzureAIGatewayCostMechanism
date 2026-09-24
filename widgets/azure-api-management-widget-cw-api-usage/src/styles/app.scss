@@ -197,6 +197,33 @@ textarea {
   font-size: 15px;
 }
 
+.usage-card h4,
+.usage-table-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.usage-status-indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 50%;
+  background: #107c10;
+  box-shadow: 0 0 0 2px rgba(16, 124, 16, 0.14);
+
+  &.warn {
+    background: #e0a200;
+    box-shadow: 0 0 0 2px rgba(224, 162, 0, 0.18);
+  }
+
+  &.high {
+    background: #d83b3b;
+    box-shadow: 0 0 0 2px rgba(216, 59, 59, 0.16);
+  }
+}
+
 .usage-subtitle {
   margin: -4px 0 10px;
   color: #666;
@@ -225,7 +252,7 @@ textarea {
 
 .usage-bar-fill {
   height: 100%;
-  background: #2b88d8;
+  background: #107c10;
 
   &.warn { background: #e0a200; }
   &.high { background: #d83b3b; }
