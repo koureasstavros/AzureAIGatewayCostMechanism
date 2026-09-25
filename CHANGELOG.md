@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.36 - 2026-09-24
+
+- Added short and long context detection for precise cost handling into input, input cache read, input cache write and output tokens
+
 ## v0.0.35 - 2026-09-24
 
 - Added bullet color indicator for subscriptions both into personal and all statistics to easily track high used subscriptions

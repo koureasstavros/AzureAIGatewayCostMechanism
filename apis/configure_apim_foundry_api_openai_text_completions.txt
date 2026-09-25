@@ -193,12 +193,24 @@ OpenAI Text Completions
         }" />
         <set-variable name="actualOutputTokens" value="@{
             var body = (JObject)context.Variables["responseJson"];
-            var outputTokens = body?["usage"]?["completions_tokens"]?.Value<int>() ?? 0;
+            var outputTokens = body?["usage"]?["completion_tokens"]?.Value<int>() ?? 0;
             return outputTokens;
         }" />
         <!-- 3. Load existing counters from cache -->
         <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
         <!-- 4. Cost rates -->
+        <set-variable name="contextThreshold" value="272000" />
+        <set-variable name="isLongContext" value="@{
+            int inputTokens = Convert.ToInt32(context.Variables["actualInputTokens"]);
+            int threshold = Convert.ToInt32(context.Variables["contextThreshold"]);
+            return inputTokens > threshold;
+        }" />
+        <set-variable name="contextThreshold" value="272000" />
+        <set-variable name="isLongContext" value="@{
+            int inputTokens = Convert.ToInt32(context.Variables["actualInputTokens"]);
+            int threshold = Convert.ToInt32(context.Variables["contextThreshold"]);
+            return inputTokens > threshold;
+        }" />
         <set-variable name="inputCostPerM" value="@{
             var model = (string)context.Variables["deploymentName"];
             if (string.IsNullOrEmpty(model))
@@ -208,15 +220,35 @@ OpenAI Text Completions
             if (model.IndexOf("GPT54MINI-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 0.75; }
 			if (model.IndexOf("GPT54-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 2.5; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 5.0 : 2.5;
+            }
             if (model.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 5.0; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 10.0 : 5.0;
+            }
             if (model.IndexOf("GPT56LUNA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 1.0; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 0.4 : 0.2;
+            }
             if (model.IndexOf("GPT56TERRA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 2.5; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 4.0 : 2.0;
+            }
             if (model.IndexOf("GPT56SOL-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 5.0; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 8.0 : 4.0;
+            }
+            if (model.IndexOf("GPT6ASTRA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 20.0 : 10.0;
+            }
             if (model.IndexOf("KIMIK25-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 0.5; }
             if (model.IndexOf("KIMIK26-GS", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -238,15 +270,35 @@ OpenAI Text Completions
             if (model.IndexOf("GPT54MINI-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 0.075; }
             if (model.IndexOf("GPT54-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.25; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 0.5 : 0.25;
+            }
             if (model.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.5; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 1.0 : 0.5;
+            }
             if (model.IndexOf("GPT56LUNA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.1; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 0.04 : 0.02;
+            }
             if (model.IndexOf("GPT56TERRA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.25; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 0.4 : 0.2;
+            }
             if (model.IndexOf("GPT56SOL-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.5; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 0.8 : 0.4;
+            }
+            if (model.IndexOf("GPT6ASTRA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 2.0 : 1.0;
+            }
             if (model.IndexOf("KIMIK25-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 0.1; }
             if (model.IndexOf("KIMIK26-GS", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -264,19 +316,33 @@ OpenAI Text Completions
             if (string.IsNullOrEmpty(model))
             { return 0.0; }
             if (model.IndexOf("GPT54NANO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.25; }
+            { return 0.2; } //NO CACHE WRITE DIFF
             if (model.IndexOf("GPT54MINI-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.9375; }
+            { return 0.75; } //NO CACHE WRITE DIFF
             if (model.IndexOf("GPT54-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 3.125; }
+            { return 2.5; } //NO CACHE WRITE DIFF
             if (model.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 6.25; }
+            { return 5.0; } //NO CACHE WRITE DIFF
             if (model.IndexOf("GPT56LUNA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 1.25; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 0.5 : 0.25;
+            }
             if (model.IndexOf("GPT56TERRA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 3.125; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 5.0 : 2.5;
+            }
             if (model.IndexOf("GPT56SOL-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 6.25; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 10.0 : 5.0;
+            }
+            if (model.IndexOf("GPT6ASTRA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 25.0 : 12.5;
+            }
             if (model.IndexOf("KIMIK25-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 0.625; }
             if (model.IndexOf("KIMIK26-GS", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -298,15 +364,35 @@ OpenAI Text Completions
             if (model.IndexOf("GPT54MINI-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 4.5; }
             if (model.IndexOf("GPT54-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 15.0; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 22.5 : 15.0;
+            }
             if (model.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 30.0; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 45.0 : 30.0;
+            }
             if (model.IndexOf("GPT56LUNA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 6.0; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 1.8 : 1.2;
+            }
             if (model.IndexOf("GPT56TERRA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 15.0; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 18.0 : 12.0;
+            }
             if (model.IndexOf("GPT56SOL-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 30.0; }
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 30.0 : 20.0;
+            }
+            if (model.IndexOf("GPT6ASTRA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                bool isLongContext = (bool)context.Variables["isLongContext"];
+                return isLongContext ? 75.0 : 50.0;
+            }
             if (model.IndexOf("KIMIK25-GS", StringComparison.OrdinalIgnoreCase) >= 0)
             { return 2.8; }
             if (model.IndexOf("KIMIK26-GS", StringComparison.OrdinalIgnoreCase) >= 0)
