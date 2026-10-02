@@ -142,7 +142,7 @@ OpenAI Video V1 Generations
             return previous + current;
         }" />
         <!-- 8. Store updated counters back into cache (30 days) -->
-        <cache-store-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newCostTotal"])" duration="2592000" />
+        <cache-store-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newCostTotal"])" duration="2147483647" />
     </outbound>
     <!-- Handle exceptions and customize error responses  -->
     <on-error>
@@ -153,17 +153,17 @@ OpenAI Video V1 Generations
 { "prompt": "Fix this" }
 ---------------------------------------
 {
-    "id": "video_6a43e05f2c7c8190aac3623e3ae707fb",
+    "id": "video_<guid>",
     "object": "video",
     "created_at": 1782833247,
     "status": "queued",
     "completed_at": null,
     "error": null,
     "expires_at": null,
-    "model": "SORA2-GS",
+    "model": "<model>",
     "progress": 0,
     "prompt": "Fix this",
-    "remixed_from_video_id": "video_6a4393508f188190a887f917bde2bc29",
+    "remixed_from_video_id": "video_<guid>",
     "seconds": "4",
     "size": "720x1280"
 }

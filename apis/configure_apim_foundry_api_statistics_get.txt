@@ -22,45 +22,46 @@ Generic Statistics
                 <header>Content-Length</header>
             </expose-headers>
         </cors>
+        <set-variable name="requestedYearMonth" value="@(context.Request.Url.Query.GetValueOrDefault("year-month", ""))" />
+        <set-variable name="yearMonth" value="@{
+            var requestedYearMonth = (string)context.Variables["requestedYearMonth"];
+            return string.IsNullOrEmpty(requestedYearMonth) ? DateTime.UtcNow.ToString("yyyy-MM") : requestedYearMonth;
+        }" />
     </inbound>
     <backend />
     <!-- Customize the responses -->
     <outbound>
-        <!-- Calculate current year-month -->
-        <set-variable name="yearMonth" value="@{
-            return DateTime.UtcNow.ToString("yyyy-MM");
-        }" />
-        <!-- Load current permanent track from cache -->
-        <cache-lookup-value key="@($"quota/{context.Subscription.Id}/track/permanent")" variable-name="storedTrack" caching-type="external" />
-        <!-- Load current accumulated cost from cache -->
-        <cache-lookup-value key="@($"quota/{context.Subscription.Id}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" caching-type="external" />
-        <!-- Load current accumulated reset from cache -->
-        <cache-lookup-value key="@($"quota/{context.Subscription.Id}/reset/permanent")" variable-name="storedReset" caching-type="external" />
-        <!-- Load current accumulated quota from cache -->
-        <cache-lookup-value key="@($"quota/{context.Subscription.Id}/quota/{context.Variables["yearMonth"]}")" variable-name="storedQuota" caching-type="external" />
-        <!-- Initiate each parameter with default value -->
+        <cache-lookup-value key="@($&quot;quota/{context.Subscription.Id}/track/permanent&quot;)" variable-name="storedTrack" caching-type="external" />
+        <cache-lookup-value key="@($&quot;quota/{context.Subscription.Id}/cost/{context.Variables[&quot;yearMonth&quot;]}&quot;)" variable-name="storedCost" caching-type="external" />
+        <cache-lookup-value key="@($&quot;quota/{context.Subscription.Id}/reset/permanent&quot;)" variable-name="storedReset" caching-type="external" />
+        <cache-lookup-value key="@($&quot;quota/{context.Subscription.Id}/quota/{context.Variables[&quot;yearMonth&quot;]}&quot;)" variable-name="storedQuota" caching-type="external" />
+        <set-variable name="hasMonthData" value="@(context.Variables.ContainsKey(&quot;storedCost&quot;) || context.Variables.ContainsKey(&quot;storedQuota&quot;))" />
         <choose>
-            <when condition="@(context.Variables.ContainsKey("storedTrack") == false)">
-                <cache-store-value key="@($"quota/{context.Subscription.Id}/track/permanent")" value="true" duration="2147483647" caching-type="external" />
+            <when condition="@(context.Variables.ContainsKey(&quot;storedTrack&quot;) == false)">
+                <cache-store-value key="@($&quot;quota/{context.Subscription.Id}/track/permanent&quot;)" value="true" duration="2147483647" caching-type="external" />
                 <set-variable name="storedTrack" value="@(true)" />
             </when>
         </choose>
         <choose>
-            <when condition="@(context.Variables.ContainsKey("storedCost") == false)">
-                <cache-store-value key="@($"quota/{context.Subscription.Id}/cost/{context.Variables["yearMonth"]}")" value="0" duration="2592000" caching-type="external" />
-                <set-variable name="storedCost" value="@((double)0)" />
-            </when>
-        </choose>
-        <choose>
-            <when condition="@(context.Variables.ContainsKey("storedReset") == false)">
-                <cache-store-value key="@($"quota/{context.Subscription.Id}/reset/permanent")" value="@((double)100)" duration="2147483647" caching-type="external" />
+            <when condition="@(context.Variables.ContainsKey(&quot;storedReset&quot;) == false)">
+                <cache-store-value key="@($&quot;quota/{context.Subscription.Id}/reset/permanent&quot;)" value="@((double)100)" duration="2147483647" caching-type="external" />
                 <set-variable name="storedReset" value="100" />
             </when>
         </choose>
         <choose>
-            <when condition="@(context.Variables.ContainsKey("storedQuota") == false)">
-                <cache-store-value key="@($"quota/{context.Subscription.Id}/quota/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["storedReset"])" duration="2592000" caching-type="external" />
-                <set-variable name="storedQuota" value="@((double)context.Variables["storedReset"])" />
+            <when condition="@(context.Variables[&quot;isCurrentMonth&quot;] == true)">
+                <choose>
+                    <when condition="@(context.Variables.ContainsKey(&quot;storedCost&quot;) == false)">
+                        <cache-store-value key="@($&quot;quota/{context.Subscription.Id}/cost/{context.Variables[&quot;yearMonth&quot;]}&quot;)" value="0" duration="2147483647" caching-type="external" />
+                        <set-variable name="storedCost" value="@((double)0)" />
+                    </when>
+                </choose>
+                <choose>
+                    <when condition="@(context.Variables.ContainsKey(&quot;storedQuota&quot;) == false)">
+                        <cache-store-value key="@($&quot;quota/{context.Subscription.Id}/quota/{context.Variables[&quot;yearMonth&quot;]}&quot;)" value="@((double)context.Variables[&quot;storedReset&quot;])" duration="2147483647" caching-type="external" />
+                        <set-variable name="storedQuota" value="@((double)context.Variables[&quot;storedReset&quot;])" />
+                    </when>
+                </choose>
             </when>
         </choose>
         <return-response>
@@ -69,19 +70,21 @@ Generic Statistics
                 <value>application/json</value>
             </set-header>
             <set-body>@{
-                var track      = Convert.ToBoolean(context.Variables.GetValueOrDefault("storedTrack", (object)true));
-                var consumed   = Convert.ToDouble(context.Variables.GetValueOrDefault("storedCost", (object)0));
-                var reset      = Convert.ToDouble(context.Variables.GetValueOrDefault("storedReset", (object)0));
-                var quota      = Convert.ToDouble(context.Variables.GetValueOrDefault("storedQuota", (object)0));
-                var remaining  = Convert.ToDouble(quota - consumed);
-                var pct        = quota > 0 ? (double)Math.Round((double)consumed / quota * 100) : 0;
+                var track = Convert.ToBoolean(context.Variables.GetValueOrDefault(&quot;storedTrack&quot;, (object)true));
+                var consumed = Convert.ToDouble(context.Variables.GetValueOrDefault(&quot;storedCost&quot;, (object)0));
+                var reset = Convert.ToDouble(context.Variables.GetValueOrDefault(&quot;storedReset&quot;, (object)0));
+                var quota = Convert.ToDouble(context.Variables.GetValueOrDefault(&quot;storedQuota&quot;, (object)0));
+                var remaining = Convert.ToDouble(quota - consumed);
+                var pct = quota > 0 ? (double)Math.Round(consumed / quota * 100, 2) : 0;
+                var hasData = (bool)context.Variables[&quot;isCurrentMonth&quot;] || (bool)context.Variables[&quot;hasMonthData&quot;];
                 return Newtonsoft.Json.JsonConvert.SerializeObject(new {
                     track = track,
-                    consumed  = consumed,
+                    consumed = consumed,
                     reset = reset,
                     quota = quota,
                     remaining = remaining,
-                    pct = pct
+                    pct = pct,
+                    hasData = hasData
                 });
             }</set-body>
         </return-response>

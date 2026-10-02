@@ -46,6 +46,7 @@ type UsageStats = {
   quota: number
   remaining: number
   pct: number
+  hasData?: boolean
 }
 
 type UsageItem = {
@@ -105,9 +106,10 @@ type AggregateStatsItem = {
   error?: string
 }
 
-type TabKey = "mine" | "all"
+type TabKey = "mine" | "all-current" | "all-history"
 
 type SortableColumn = "userName" | "productName" | "subscriptionName" | "state" | "track" | "consumed" | "reset" | "quota" | "remaining" | "pct"
+type HistorySortableColumn = "userName" | "productName" | "subscriptionName" | "consumed" | "quota" | "pct"
 
 type SortDirection = "asc" | "desc"
 
@@ -141,6 +143,37 @@ const PERCENTAGE_DECIMAL_PLACES = 2
 function roundPercentage(value: number): number {
   const factor = 10 ** PERCENTAGE_DECIMAL_PLACES
   return Math.round((value + Number.EPSILON) * factor) / factor
+}
+
+function getCurrentYearMonth(): string {
+  return new Date().toISOString().slice(0, 7)
+}
+
+function getYearMonths(startYearMonth: string, endYearMonth: string): string[] {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(startYearMonth) || startYearMonth > endYearMonth) return []
+
+  const yearMonths: string[] = []
+  const [startYear, startMonthNumber] = startYearMonth.split("-").map(Number)
+  const [endYear, endMonthNumber] = endYearMonth.split("-").map(Number)
+  let year = startYear
+  let yearMonth = startMonthNumber
+
+  while (year < endYear || (year === endYear && yearMonth <= endMonthNumber)) {
+    yearMonths.push(`${year.toString().padStart(4, "0")}-${yearMonth.toString().padStart(2, "0")}`)
+    yearMonth += 1
+    if (yearMonth > 12) {
+      yearMonth = 1
+      year += 1
+    }
+  }
+
+  return yearMonths
+}
+
+function withStatisticsYearMonth(url: string, yearMonth: string): string {
+  const requestUrl = new URL(url)
+  requestUrl.searchParams.set("year-month", yearMonth)
+  return requestUrl.toString()
 }
 
 function delay(milliseconds: number): Promise<void> {
@@ -204,6 +237,10 @@ function validateUsageStats(value: unknown): UsageStats {
     throw new Error("Statistics response has an invalid track value")
   }
 
+  if (stats.hasData !== undefined && typeof stats.hasData !== "boolean") {
+    throw new Error("Statistics response has an invalid hasData value")
+  }
+
   if (stats.reset !== undefined && (typeof stats.reset !== "number" || !Number.isFinite(stats.reset))) {
     throw new Error("Statistics response has an invalid reset value")
   }
@@ -212,6 +249,7 @@ function validateUsageStats(value: unknown): UsageStats {
   return {
     ...validatedStats,
     track: validatedStats.track ?? true,
+    hasData: validatedStats.hasData ?? true,
     pct: roundPercentage(validatedStats.quota > 0
       ? validatedStats.consumed / validatedStats.quota * 100
       : 0),
@@ -223,6 +261,7 @@ async function requestStatistics(
   url: string,
   subscriptionKeyHeader: string,
   subscriptionKey: string,
+  yearMonth: string,
   debug: string[],
 ): Promise<UsageStats> {
   let lastError: unknown
@@ -233,7 +272,7 @@ async function requestStatistics(
     let response: Response | undefined
 
     try {
-      response = await externalRequest(url, {
+      response = await externalRequest(withStatisticsYearMonth(url, yearMonth), {
         [subscriptionKeyHeader]: subscriptionKey,
       }, {
         signal: controller.signal,
@@ -615,13 +654,19 @@ const App = () => {
 
   const [items, setItems] = useState<UsageItem[] | undefined>()
   const [allItems, setAllItems] = useState<AggregateStatsItem[] | undefined>()
+  const [allHistoryItems, setAllHistoryItems] = useState<Record<string, AggregateStatsItem[]> | undefined>()
+  const [allHistoryLoadError, setAllHistoryLoadError] = useState<string | undefined>()
+  const [isAllHistoryLoading, setIsAllHistoryLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | undefined>()
   const [allLoadError, setAllLoadError] = useState<string | undefined>()
   const [isContributorUser, setIsContributorUser] = useState(false)
   const [contributorDebug, setContributorDebug] = useState<string[]>([])
   const [activeTab, setActiveTab] = useState<TabKey>("mine")
+  const [historyStartYearMonth, setHistoryStartYearMonth] = useState(getCurrentYearMonth)
   const [sortColumn, setSortColumn] = useState<SortableColumn>("consumed")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
+  const [historySortColumn, setHistorySortColumn] = useState<HistorySortableColumn>("pct")
+  const [historySortDirection, setHistorySortDirection] = useState<SortDirection>("desc")
   const [refreshToken, setRefreshToken] = useState(0)
   const [isMineLoading, setIsMineLoading] = useState(true)
   const [isAllLoading, setIsAllLoading] = useState(true)
@@ -634,6 +679,9 @@ const App = () => {
   const refresh = useCallback(() => {
     setItems(undefined)
     setAllItems(undefined)
+    setAllHistoryItems(undefined)
+    setAllHistoryLoadError(undefined)
+    setIsAllHistoryLoading(false)
     setLoadError(undefined)
     setAllLoadError(undefined)
     setIsMineLoading(true)
@@ -649,6 +697,7 @@ const App = () => {
     const limitStatisticsConcurrency = createConcurrencyLimiter(STATISTICS_MAX_CONCURRENCY)
 
     async function load() {
+      const currentYearMonth = getCurrentYearMonth()
       try {
         const groupsRes = await request("/groups")
         const groups = groupsRes.ok
@@ -682,7 +731,7 @@ const App = () => {
             `groupUsersReturned=${groupUsers.map(user => user.name ?? user.id).join(", ") || "none"}`,
             `isContributorUser=${contributorUser ? "yes" : "no"}`,
           ])
-          setActiveTab(current => (current === "all" && !contributorUser ? "mine" : current))
+          setActiveTab(current => (current !== "mine" && !contributorUser ? "mine" : current))
         }
 
         // 1. List this user's subscriptions.
@@ -743,6 +792,7 @@ const App = () => {
                 values.statisticsApiUrl,
                 values.subscriptionKeyHeader,
                 key,
+                currentYearMonth,
                 debug,
               )
               if (!cancelled) {
@@ -868,6 +918,7 @@ const App = () => {
                     values.statisticsApiUrl,
                     values.subscriptionKeyHeader,
                     key,
+                    currentYearMonth,
                     debug,
                   )
                   debug.push(`statisticsResponse=${JSON.stringify(stats)}`)
@@ -938,6 +989,111 @@ const App = () => {
       cancelled = true
     }
   }, [userId, request, developerPortalRequest, externalRequest, values.statisticsApiUrl, values.subscriptionKeyHeader, values.contributorGroupName, refreshToken])
+
+  useEffect(() => {
+    if (activeTab !== "all-history" || !isContributorUser || isAllLoading || !allItems) return
+
+    let cancelled = false
+    const limitStatisticsConcurrency = createConcurrencyLimiter(STATISTICS_MAX_CONCURRENCY)
+
+    async function loadHistory() {
+      const historySourceItems = allItems
+      if (!historySourceItems) return
+
+      setIsAllHistoryLoading(true)
+      setAllHistoryItems(undefined)
+      setAllHistoryLoadError(undefined)
+
+      const currentYearMonth = getCurrentYearMonth()
+      const yearMonths = getYearMonths(historyStartYearMonth, currentYearMonth)
+      if (!yearMonths.length) {
+        setAllHistoryLoadError("Select a valid history start year-month (yyyy-MM) that is not later than the current year-month.")
+        setIsAllHistoryLoading(false)
+        return
+      }
+
+      try {
+        const subscriptionsResponse = await request("/subscriptions")
+        const subscriptions = subscriptionsResponse.ok
+          ? await getInitialAndPagedCollection<SubscriptionEntity>(subscriptionsResponse, request)
+          : []
+        const subscriptionById = new Map(subscriptions.map(subscription => [normalizeText(subscription.name), subscription]))
+        const trackedItems = historySourceItems.filter(item => item.track !== false)
+
+        const subscriptionKeys = await Promise.all(trackedItems.map(item => limitStatisticsConcurrency(async () => {
+          const subscription = subscriptionById.get(normalizeText(item.subscriptionId))
+          if (!subscription) return {item, key: undefined}
+
+          try {
+            const key = await getSubscriptionKeyForAdminView(subscription, request)
+            return {item, key}
+          } catch {
+            return {item, key: undefined}
+          }
+        })))
+
+        if (!cancelled) setAllHistoryItems({})
+
+        for (const yearMonth of yearMonths) {
+          if (!cancelled) {
+            setAllHistoryItems(current => ({...(current ?? {}), [yearMonth]: []}))
+          }
+
+          const subscriptionPromises = subscriptionKeys.map(({item, key}) => limitStatisticsConcurrency(async (): Promise<AggregateStatsItem | undefined> => {
+            if (!key) return {...item, error: "No subscription key available for this subscription."}
+
+            try {
+              const stats = await requestStatistics(
+                externalRequest,
+                values.statisticsApiUrl,
+                values.subscriptionKeyHeader,
+                key,
+                yearMonth,
+                [],
+              )
+              if (!stats.track || !stats.hasData) return undefined
+
+              return {
+                ...item,
+                track: stats.track,
+                consumed: stats.consumed,
+                quota: stats.quota,
+                pct: stats.pct,
+                error: undefined,
+              }
+            } catch (error) {
+              return {...item, error: formatError(error)}
+            }
+          }))
+
+          subscriptionPromises.forEach(promise => {
+            void promise.then(item => {
+              if (item && !cancelled) {
+                setAllHistoryItems(current => ({
+                  ...(current ?? {}),
+                  [yearMonth]: [...(current?.[yearMonth] ?? []), item],
+                }))
+              }
+            })
+          })
+
+          await Promise.all(subscriptionPromises)
+        }
+
+        if (!cancelled) setIsAllHistoryLoading(false)
+      } catch (error) {
+        if (!cancelled) {
+          setAllHistoryLoadError(formatError(error))
+          setIsAllHistoryLoading(false)
+        }
+      }
+    }
+
+    void loadHistory()
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, allItems, externalRequest, isAllLoading, isContributorUser, request, historyStartYearMonth, values.statisticsApiUrl, values.subscriptionKeyHeader])
 
   const aggregateSummary = useMemo<AggregateSummary | undefined>(() => {
     const validItems = allItems?.filter(item => !item.error && item.consumed !== undefined)
@@ -1020,6 +1176,23 @@ const App = () => {
     if (sortColumn !== column) return "↕"
     return sortDirection === "asc" ? "↑" : "↓"
   }, [sortColumn, sortDirection])
+
+  const toggleHistorySort = useCallback((column: HistorySortableColumn) => {
+    setHistorySortColumn(currentColumn => {
+      if (currentColumn === column) {
+        setHistorySortDirection(currentDirection => currentDirection === "asc" ? "desc" : "asc")
+        return currentColumn
+      }
+
+      setHistorySortDirection("asc")
+      return column
+    })
+  }, [])
+
+  const getHistorySortIndicator = useCallback((column: HistorySortableColumn) => {
+    if (historySortColumn !== column) return "↕"
+    return historySortDirection === "asc" ? "↑" : "↓"
+  }, [historySortColumn, historySortDirection])
 
   const startEditingStatistics = useCallback((item: AggregateStatsItem) => {
     setEditingSubscriptionId(item.subscriptionId)
@@ -1381,6 +1554,86 @@ const App = () => {
     )
   })()
 
+  const allHistoryContent = (() => {
+    if (!isContributorUser) return null
+    if (allHistoryLoadError) return <div className="usage-error">Could not load history: {allHistoryLoadError}</div>
+    if (!allHistoryItems) return <div className="usage-loading">Loading all history…</div>
+
+    const yearMonths = Object.keys(allHistoryItems).sort((left, right) => right.localeCompare(left))
+    const hasHistory = yearMonths.some(yearMonth => allHistoryItems[yearMonth]?.length)
+
+    return (
+      <div className="usage-history-months">
+        <div className="usage-history-filter">
+          <label htmlFor="history-start-year-month">History start year-month</label>
+          <input
+            className="form-control"
+            id="history-start-year-month"
+            max={getCurrentYearMonth()}
+            onChange={event => setHistoryStartYearMonth(event.target.value)}
+            type="month"
+            value={historyStartYearMonth}
+          />
+        </div>
+        {isAllHistoryLoading ? <div className="usage-loading usage-loading-more">Loading more history…</div> : null}
+        {!hasHistory && !isAllHistoryLoading ? <div className="usage-loading">No tracked subscription history found for this period.</div> : null}
+        {yearMonths.filter(yearMonth => allHistoryItems[yearMonth]?.length).map(yearMonth => {
+          const yearMonthItems = [...(allHistoryItems[yearMonth] ?? [])].sort((left, right) => {
+            const comparison = (() => {
+              switch (historySortColumn) {
+                case "userName": return compareNullableStrings(left.userName, right.userName)
+                case "productName": return compareNullableStrings(left.productName, right.productName)
+                case "subscriptionName": return compareNullableStrings(left.subscriptionName, right.subscriptionName)
+                case "consumed": return compareNullableNumbers(left.consumed, right.consumed)
+                case "quota": return compareNullableNumbers(left.quota, right.quota)
+                case "pct": return compareNullableNumbers(left.pct, right.pct)
+                default: return 0
+              }
+            })()
+            return historySortDirection === "asc" ? comparison : -comparison
+          })
+          return (
+            <details className="usage-history-month" key={yearMonth}>
+              <summary>
+                <strong>{yearMonth}</strong>
+                <span>{yearMonthItems.length} tracked subscription{yearMonthItems.length === 1 ? "" : "s"}</span>
+              </summary>
+              <div className="usage-table-wrapper usage-history-table-wrapper">
+                <table className="usage-table usage-history-table">
+                  <thead>
+                    <tr>
+                      <th><button className="usage-sort-button" onClick={() => toggleHistorySort("userName")} type="button">User Name {getHistorySortIndicator("userName")}</button></th>
+                      <th><button className="usage-sort-button" onClick={() => toggleHistorySort("productName")} type="button">Product Name {getHistorySortIndicator("productName")}</button></th>
+                      <th><button className="usage-sort-button" onClick={() => toggleHistorySort("subscriptionName")} type="button">Subscription Name {getHistorySortIndicator("subscriptionName")}</button></th>
+                      <th><button className="usage-sort-button" onClick={() => toggleHistorySort("consumed")} type="button">Consumed {getHistorySortIndicator("consumed")}</button></th>
+                      <th><button className="usage-sort-button" onClick={() => toggleHistorySort("quota")} type="button">Quota {getHistorySortIndicator("quota")}</button></th>
+                      <th><button className="usage-sort-button" onClick={() => toggleHistorySort("pct")} type="button">Usage % {getHistorySortIndicator("pct")}</button></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {yearMonthItems.map((item, index) => (
+                      <tr key={`${item.subscriptionId}-${index}`}>
+                        <td>{item.userName ?? "-"}</td>
+                        <td>{item.productName ?? "-"}</td>
+                        <td>
+                          {item.subscriptionName}
+                          {item.error ? <div className="usage-table-secondary usage-error">{item.error}</div> : null}
+                        </td>
+                        <td>{formatOptionalNumber(item.consumed, 2)}</td>
+                        <td>{formatOptionalNumber(item.quota, 2)}</td>
+                        <td>{formatOptionalNumber(item.pct, PERCENTAGE_DECIMAL_PLACES, "%")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )
+        })}
+      </div>
+    )
+  })()
+
   return (
     <div className="usage-widget-root">
       <div className="usage-widget-header">
@@ -1389,7 +1642,9 @@ const App = () => {
           <div className="usage-widget-caption">
             {activeTab === "mine"
               ? "Your current subscription usage and quota status."
-              : "Aggregate statistics for all users, products, and subscriptions."}
+              : activeTab === "all-current"
+                ? "Current aggregate statistics for all users, products, and subscriptions."
+                : "Monthly history for tracked subscriptions."}
           </div>
         </div>
         <div className="usage-widget-actions">
@@ -1400,14 +1655,21 @@ const App = () => {
                 onClick={() => setActiveTab("mine")}
                 type="button"
               >
-                My usage
+                Mine
               </button>
               <button
-                className={`usage-tab ${activeTab === "all" ? "active" : ""}`}
-                onClick={() => setActiveTab("all")}
+                className={`usage-tab ${activeTab === "all-current" ? "active" : ""}`}
+                                onClick={() => setActiveTab("all-current")}
                 type="button"
               >
-                All statistics
+                All Current
+              </button>
+              <button
+                className={`usage-tab ${activeTab === "all-history" ? "active" : ""}`}
+                                onClick={() => setActiveTab("all-history")}
+                type="button"
+              >
+                All History
               </button>
             </div>
           ) : null}
@@ -1423,7 +1685,11 @@ const App = () => {
         </details>
       ) : null}
       <div className="usage-widget-content">
-        {activeTab === "all" && isContributorUser ? allContent : mineContent}
+        {activeTab === "all-current" && isContributorUser
+          ? allContent
+                  : activeTab === "all-history" && isContributorUser
+            ? allHistoryContent
+            : mineContent}
       </div>
     </div>
   )

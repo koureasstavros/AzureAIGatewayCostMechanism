@@ -140,7 +140,7 @@ OpenAI Video V1 Generations
             return previous + current;
         }" />
         <!-- 8. Store updated counters back into cache (30 days) -->
-        <cache-store-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newCostTotal"])" duration="2592000" />
+        <cache-store-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newCostTotal"])" duration="2147483647" />
     </outbound>
     <!-- Handle exceptions and customize error responses  -->
     <on-error>
@@ -156,14 +156,14 @@ OpenAI Video V1 Generations
 }
 ---------------------------------------
 {
-    "id": "video_6a427da8134081909b952a80b49e178f",
+    "id": "video_<guid>",
     "object": "video",
     "created_at": 1782742440,
     "status": "queued",
     "completed_at": null,
     "error": null,
     "expires_at": null,
-    "model": "SORA2-GS",
+    "model": "<model>",
     "progress": 0,
     "prompt": "Actions:\nUse avatar of stavros with animations and movements showing with the arms the documentation tool which is capable to listen into user's request and respond to it speaking the user's language while explaining the news in a tv channel studio\nStavros is explaining the documentation tool capability\nCharacters:\nUse the stavros avatar during video animation while stavros is showcasing the documentation\nVoiceover:\nWelcome to latest AI news, Documentation Tool is now capable to listen and talk back to you allowing hands free interaction\nDuration:\n12s\nNotes:\nUse same voice as the source video\nUse news music as background\nDo not use the input frame as is, just take the characters and screens to use them\nUse the screens from the input frame of the tool to animate them with transistions and zooming\nUse audio indications like talking and speaking into the chat",
     "remixed_from_video_id": null,

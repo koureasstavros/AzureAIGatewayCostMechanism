@@ -195,7 +195,7 @@ Anthropic Text Messages
             return previous + current;
         }" />
         <!-- 8. Store updated counters back into cache (30 days) -->
-        <cache-store-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newCostTotal"])" duration="2592000" />
+        <cache-store-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newCostTotal"])" duration="2147483647" />
     </outbound>
     <on-error>
         <base />

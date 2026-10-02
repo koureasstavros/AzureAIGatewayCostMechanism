@@ -5,7 +5,7 @@ type StringValueKey = {
   [Key in keyof Values]: Values[Key] extends string ? Key : never
 }[keyof Values]
 
-function InputField({valueKey, title}: {valueKey: StringValueKey, title?: string}) {
+function InputField({valueKey, title, type = "text"}: {valueKey: StringValueKey, title?: string, type?: "text" | "month"}) {
   const editorValues = useEditorValues()
   const onChange = useOnChange()
 
@@ -17,7 +17,7 @@ function InputField({valueKey, title}: {valueKey: StringValueKey, title?: string
       <div className="input-group">
         <input
           className="form-control"
-          type="text"
+          type={type}
           placeholder={valuesDefault[valueKey]}
           defaultValue={editorValues[valueKey]}
           onInput={e => {

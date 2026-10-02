@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.37 - 2026-10-02
+
+- Added all-history statistics view and changed policies to keep the information forever
+
 ## v0.0.36 - 2026-09-24
 
 - Added short and long context detection for precise cost handling into input, input cache read, input cache write and output tokens

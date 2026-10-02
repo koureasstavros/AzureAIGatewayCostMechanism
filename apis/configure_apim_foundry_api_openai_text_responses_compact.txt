@@ -352,7 +352,7 @@ OpenAI Text Responses Compact
             return previous + current;
         }" />
         <!-- 8. Store updated counters back into cache (30 days) -->
-        <cache-store-value key="@($"quota/{context.Subscription.Id}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newCostTotal"])" duration="2592000" caching-type="external" />
+        <cache-store-value key="@($"quota/{context.Subscription.Id}/cost/{context.Variables["yearMonth"]}")" value="@((double)context.Variables["newCostTotal"])" duration="2147483647" caching-type="external" />
         <!-- 9. Store updated counters back into cache (30 days) -->
         <emit-metric name="Request Correlation" value="1">
             <dimension name="User ID" value="@(context.User?.Id)" />
