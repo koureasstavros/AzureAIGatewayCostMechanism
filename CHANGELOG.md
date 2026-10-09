@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.38 - 2026-10-09
+
+- Aligned readme with current limitations
+
 ## v0.0.37 - 2026-10-02
 
 - Added all-history statistics view and changed policies to keep the information forever

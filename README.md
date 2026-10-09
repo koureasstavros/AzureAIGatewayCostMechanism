@@ -82,7 +82,10 @@ The mechanism can count and report:
 
 - **Text**
 - - Input tokens
+- - Input Cache Read tokens
+- - Input Cache Write tokens
 - - Output tokens
+- - Output Reasoning tokens
 - **Image**
 - - Objects
 - **Audio**
@@ -92,7 +95,6 @@ The mechanism can count and report:
 
 Current limitations:
 
-- The mechanism currently **does not count cached tokens**.
 - The mechanism currently **does not count other variations like image or video analysis**.
 - You have to manually map your deployment names with cost rations
 
