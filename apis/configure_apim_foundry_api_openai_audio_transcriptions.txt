@@ -147,14 +147,7 @@ OpenAI Audio Transcriptions
         <!-- 3. Load existing counters from cache -->
         <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
         <!-- 4. Cost rates -->
-        <set-variable name="totalCostPerS" value="@{           
-            var model = (string)context.Variables["deploymentName"];
-            if (string.IsNullOrEmpty(model))
-            { return 0.0; }
-            if (model.IndexOf("WHISPER-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.0001; } //0.36 per hour
-            return 0.001; // Default fallback
-        }" />
+		<include-fragment fragment-id="audio-deployments-checks-totalCostPerS" />
         <!-- 5. Calculate cost -->
         <set-variable name="totalCost" value="@{
             double rate = (double)context.Variables["totalCostPerS"];

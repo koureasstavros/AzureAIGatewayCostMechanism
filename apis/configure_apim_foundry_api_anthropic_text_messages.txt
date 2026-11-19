@@ -126,51 +126,22 @@ Anthropic Text Messages
         <!-- 3. Load existing counters from cache -->
         <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
         <!-- 4. Cost rates -->
-        <set-variable name="inputCostPerM" value="@{
-            var model = (string)context.Variables["modelId"];
-            if (string.IsNullOrEmpty(model))
-            { return 0.0; }
-            if (model.IndexOf("claude-haiku-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 1.0; }
-            if (model.IndexOf("claude-sonnet-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 3.0; }
-            if (model.IndexOf("claude-opus-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 5.0; }
-            return 5.0; // Default fallback
-        }" />
-        <set-variable name="inputCachedCostPerM" value="@{
-            var model = (string)context.Variables["modelId"];
-            if (string.IsNullOrEmpty(model))
-            { return 0.0; }            
-            if (model.IndexOf("claude-haiku-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.1; }
-            if (model.IndexOf("claude-sonnet-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.3; }
-            if (model.IndexOf("claude-opus-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 0.5; }
-            return 1.0; // Default fallback            
-        }" />
-        <set-variable name="outputCostPerM" value="@{
-            var model = (string)context.Variables["modelId"];
-            if (string.IsNullOrEmpty(model))
-            { return 0.0; }
-            if (model.IndexOf("claude-haiku-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 5.0; }
-            if (model.IndexOf("claude-sonnet-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 15.0; }
-            if (model.IndexOf("claude-opus-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 25.0; }
-            return 30.0; // Default fallback
-        }" />
+        <include-fragment fragment-id="text-deployments-checks-inputCostPerM" />
+        <include-fragment fragment-id="text-deployments-checks-inputCachedReadCostPerM" />
+        <include-fragment fragment-id="text-deployments-checks-inputCachedWriteCostPerM" />
+        <include-fragment fragment-id="text-deployments-checks-outputCostPerM" />
         <!-- 5. Calculate cost -->
         <set-variable name="inputCost" value="@{
             double rate = (double)context.Variables["inputCostPerM"];
 			double tokens = (double)(int)context.Variables["actualInputTokens"];
-			double cachedrate = (double)context.Variables["inputCachedCostPerM"];
-			double cachedtokens = (double)(int)context.Variables["actualCachedInputTokens"];
-            double cost = rate * (tokens - cachedtokens) / 1000000.0;
-            double cachedcost = cachedrate * cachedtokens / 1000000.0;
-			return cost + cachedcost;
+			double cachedreadrate = (double)context.Variables["inputCachedReadCostPerM"];
+			double cachedreadtokens = (double)(int)context.Variables["actualCachedReadInputTokens"];
+			double cachedwriterate = (double)context.Variables["inputCachedWriteCostPerM"];
+			double cachedwritetokens = (double)(int)context.Variables["actualCachedWriteInputTokens"];
+            double cost = rate * (tokens - cachedreadtokens - cachedwritetokens) / 1000000.0;
+            double cachedreadcost = cachedreadrate * cachedreadtokens / 1000000.0;
+            double cachedwritecost = cachedwriterate * cachedwritetokens / 1000000.0;
+			return cost + cachedreadcost + cachedwritecost;
         }" />
         <set-variable name="outputCost" value="@{
             double rate = (double)context.Variables["outputCostPerM"];

@@ -1,0 +1,10 @@
+<fragment>
+	<set-variable name="totalCostPerS" value="@{            
+        var idx = context.Variables.GetValueOrDefault<string>("modelId") ?? context.Variables.GetValueOrDefault<string>("deploymentName");
+        if (string.IsNullOrEmpty(idx))
+        { return 0.0; }
+        if (idx.IndexOf("SORA2-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.1; }
+        return 0.1; // Default fallback
+    }" />
+</fragment>

@@ -1,5 +1,25 @@
 <policies>
     <inbound>
+        <cors allow-credentials="false">
+            <allowed-origins>
+                <origin>*</origin>
+            </allowed-origins>
+            <allowed-methods>
+                <method>GET</method>
+                <method>POST</method>
+                <method>OPTIONS</method>
+            </allowed-methods>
+            <allowed-headers>
+                <header>x-apim-key</header>
+                <header>Content-Type</header>
+                <header>api-key</header>
+                <header>Authorization</header>
+            </allowed-headers>
+            <expose-headers>
+                <header>Content-Type</header>
+                <header>Content-Length</header>
+            </expose-headers>
+        </cors>
         <base />
         <set-backend-service id="apim-generated-policy" backend-id="hub-gpe-shared-eastus2-001" />
         <set-variable name="yearMonth" value="@{

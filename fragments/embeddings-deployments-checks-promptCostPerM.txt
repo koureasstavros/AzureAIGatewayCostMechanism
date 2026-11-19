@@ -1,0 +1,12 @@
+<fragment>
+	<set-variable name="promptCostPerM" value="@{
+        var idx = context.Variables.GetValueOrDefault<string>("modelId") ?? context.Variables.GetValueOrDefault<string>("deploymentName");
+        if (string.IsNullOrEmpty(idx))
+        { return 0.0; }
+        if (idx.IndexOf("ADA2-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.1; }
+        if (idx.IndexOf("ADA3-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.13; }
+        return 0.2; // Default fallback
+    }" />
+</fragment>

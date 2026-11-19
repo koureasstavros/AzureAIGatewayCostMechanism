@@ -1,0 +1,75 @@
+<fragment>
+	<set-variable name="inputCachedReadCostPerM" value="@{
+        var idx = context.Variables.GetValueOrDefault<string>("modelId") ?? context.Variables.GetValueOrDefault<string>("deploymentName");
+        if (string.IsNullOrEmpty(idx))
+        { return 0.0; }            
+        if (idx.IndexOf("GPT54NANO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.02; }
+        if (idx.IndexOf("GPT54MINI-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.075; }
+        if (idx.IndexOf("GPT54-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            bool isLongContext = (bool)context.Variables["isLongContext"];
+            return isLongContext ? 0.5 : 0.25;
+        }
+        if (idx.IndexOf("GPT55-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            bool isLongContext = (bool)context.Variables["isLongContext"];
+            return isLongContext ? 1.0 : 0.5;
+        }
+        if (idx.IndexOf("GPT56LUNA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            bool isLongContext = (bool)context.Variables["isLongContext"];
+            return isLongContext ? 0.04 : 0.02;
+        }
+        if (idx.IndexOf("GPT56TERRA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            bool isLongContext = (bool)context.Variables["isLongContext"];
+            return isLongContext ? 0.4 : 0.2;
+        }
+        if (idx.IndexOf("GPT56SOL-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            bool isLongContext = (bool)context.Variables["isLongContext"];
+            return isLongContext ? 0.8 : 0.4;
+        }
+        if (idx.IndexOf("GPT6LUNA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            bool isLongContext = (bool)context.Variables["isLongContext"];
+            return isLongContext ? 0.02 : 0.01;
+        }
+        if (idx.IndexOf("GPT6SOL-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            bool isLongContext = (bool)context.Variables["isLongContext"];
+            return isLongContext ? 0.4 : 0.2;
+        }
+        if (idx.IndexOf("GPT6ASTRA-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            bool isLongContext = (bool)context.Variables["isLongContext"];
+            return isLongContext ? 2.0 : 1.0;
+        }
+        if (idx.IndexOf("GPT61SOL-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            bool isLongContext = (bool)context.Variables["isLongContext"];
+            return isLongContext ? 0.1 : 0.2;
+        }
+        if (idx.IndexOf("KIMIK25-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.1; }
+        if (idx.IndexOf("KIMIK26-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.16; }
+        if (idx.IndexOf("GROK46-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.5; }
+        if (idx.IndexOf("MAITHINKING1-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.2; }
+        if (idx.IndexOf("DEEPSEEKV4FLASH-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.028; }
+        if (idx.IndexOf("DEEPSEEKV4PRO-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.145; }
+        if (idx.IndexOf("claude-haiku-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.1; }
+        if (idx.IndexOf("claude-sonnet-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.3; }
+        if (idx.IndexOf("claude-opus-4.5", StringComparison.OrdinalIgnoreCase) >= 0)
+        { return 0.5; }
+        return 1.0; // Default fallback             
+    }" />
+</fragment>

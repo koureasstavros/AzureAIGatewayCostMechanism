@@ -150,14 +150,7 @@ OpenAI Image V1 Edits
         <!-- 3. Load existing counters from cache -->
         <cache-lookup-value key="@($"quota/{context.Subscription.Key}/cost/{context.Variables["yearMonth"]}")" variable-name="storedCost" />
         <!-- 4. Cost rates -->
-        <set-variable name="totalCostPerI" value="@{           
-            var model = (string)context.Variables["modelId"];
-            if (string.IsNullOrEmpty(model))
-            { return 0.0; }
-            if (model.IndexOf("GPTIMAGE15-GS", StringComparison.OrdinalIgnoreCase) >= 0)
-            { return 32.0; }
-            return 32.0; // Default fallback
-        }" />
+		<include-fragment fragment-id="image-deployments-checks-totalCostPerS" />
         <!-- 5. Calculate cost -->
         <set-variable name="totalCost" value="@{
             double rate = (double)context.Variables["totalCostPerI"];
