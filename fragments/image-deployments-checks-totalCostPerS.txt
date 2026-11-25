@@ -3,7 +3,7 @@
         var idx = context.Variables.GetValueOrDefault<string>("modelId") ?? context.Variables.GetValueOrDefault<string>("deploymentName");
         if (string.IsNullOrEmpty(idx))
         { return 0.0; }
-        if (idx.IndexOf("GPTIMAGE15-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (string.Equals(idx, "GPTIMAGE15-GS", StringComparison.OrdinalIgnoreCase))
         { return 32.0; }
         return 32.0; // Default fallback
     }" />

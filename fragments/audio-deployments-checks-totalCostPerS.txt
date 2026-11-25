@@ -3,7 +3,7 @@
         var idx = context.Variables.GetValueOrDefault<string>("modelId") ?? context.Variables.GetValueOrDefault<string>("deploymentName");
         if (string.IsNullOrEmpty(idx))
         { return 0.0; }
-        if (idx.IndexOf("WHISPER-GS", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (string.Equals(idx, "WHISPER-GS", StringComparison.OrdinalIgnoreCase))
         { return 0.0001; } //0.36 per hour
         return 0.001; // Default fallback
     }" />
