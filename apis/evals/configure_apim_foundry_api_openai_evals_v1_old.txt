@@ -1,0 +1,120 @@
+OpenAI Evals V1 Old
+---------------------------------------
+/openai/v1/evals
+---------------------------------------
+<policies>
+    <inbound>
+        <base />
+        <rewrite-uri template="@($"/openai/v1/evals")" copy-unmatched-params="false" />
+    </inbound>
+    <!-- Control if and how the requests are forwarded to services  -->
+    <backend>
+        <base />
+    </backend>
+    <!-- Customize the responses -->
+    <outbound>
+        <base />
+    </outbound>
+    <!-- Handle exceptions and customize error responses  -->
+    <on-error>
+        <base />
+    </on-error>
+</policies>
+---------------------------------------
+{
+  "name": "booking-agent-eval",
+  "data_source_config": {
+    "type": "custom",
+    "item_schema": {
+      "type": "object",
+      "properties": {
+        "user_message": { "type": "string" },
+        "assistant_reply": { "type": "string" }
+      },
+      "required": ["user_message", "assistant_reply"]
+    },
+    "include_sample_schema": false
+  },
+  "testing_criteria": [
+    {
+      "type": "score_model",
+      "name": "reply_quality",
+      "model": "{{openai_model_text}}",
+      "input": [
+        {
+          "role": "developer",
+          "content": "You grade a customer-service reply. Score 1 if the reply correctly and directly answers the customer's question, otherwise 0."
+        },
+        {
+          "role": "user",
+          "content": "Customer: {{item.user_message}}\nAssistant: {{item.assistant_reply}}"
+        }
+      ],
+      "pass_threshold": 1,
+      "range": [0, 1]
+    }
+  ]
+}
+---------------------------------------
+{
+    "id": "eval_6b096be5b6388191a3740a8a66ebbeb9",
+    "object": "eval",
+    "created_at": 1795779557,
+    "data_source_config": {
+        "type": "custom",
+        "max_items": null,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "item": {
+                    "type": "object",
+                    "properties": {
+                        "user_message": {
+                            "type": "string"
+                        },
+                        "assistant_reply": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "user_message",
+                        "assistant_reply"
+                    ]
+                }
+            },
+            "required": [
+                "item"
+            ]
+        }
+    },
+    "name": "booking-agent-eval",
+    "testing_criteria": [
+        {
+            "id": "reply_quality-f26d9a72-2bcc-4948-9d10-9e394e2c44ee",
+            "type": "score_model",
+            "grdr_id": null,
+            "inactive_at": null,
+            "input": [
+                {
+                    "type": "message",
+                    "role": "developer",
+                    "content": "You grade a customer-service reply. Score 1 if the reply correctly and directly answers the customer's question, otherwise 0."
+                },
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": "Customer: {{item.user_message}}\nAssistant: {{item.assistant_reply}}"
+                }
+            ],
+            "model": "GPT6LUNA-GS",
+            "name": "reply_quality",
+            "pass_threshold": 1.0,
+            "range": [
+                0.0,
+                1.0
+            ],
+            "sampling_params": null
+        }
+    ],
+    "metadata": {}
+}

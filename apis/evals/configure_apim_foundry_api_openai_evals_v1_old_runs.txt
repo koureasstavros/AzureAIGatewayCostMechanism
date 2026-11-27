@@ -1,0 +1,77 @@
+OpenAI Evals V1 Old Runs
+---------------------------------------
+/openai/v1/evals/{eval}/runs
+---------------------------------------
+<policies>
+    <inbound>
+        <base />
+        <set-variable name="evalId" value="@(context.Request.MatchedParameters["eval"])" />
+        <rewrite-uri template="@($"/openai/v1/evals/{context.Variables["evalId"]}/runs")" copy-unmatched-params="false" />
+    </inbound>
+    <!-- Control if and how the requests are forwarded to services  -->
+    <backend>
+        <base />
+    </backend>
+    <!-- Customize the responses -->
+    <outbound>
+        <base />
+    </outbound>
+    <!-- Handle exceptions and customize error responses  -->
+    <on-error>
+        <base />
+    </on-error>
+</policies>
+---------------------------------------
+{
+  "name": "run-1",
+  "data_source": {
+    "type": "jsonl",
+    "source": {
+      "type": "file_content",
+      "content": [
+        {
+          "item": {
+            "user_message": "What time do you close today?",
+            "assistant_reply": "We close at 6 PM today."
+          }
+        }
+      ]
+    }
+  }
+}
+---------------------------------------
+{
+    "id": "evalrun_6b096bf5f7e481919e0b8f302599ff79",
+    "object": "eval.run",
+    "created_at": 1795779574,
+    "status": "queued",
+    "data_source": {
+        "type": "jsonl",
+        "source": {
+            "type": "file_content",
+            "content": [
+                {
+                    "item": {
+                        "user_message": "What time do you close today?",
+                        "assistant_reply": "We close at 6 PM today."
+                    }
+                }
+            ]
+        }
+    },
+    "error": null,
+    "eval_id": "eval_6b096be5b6388191a3740a8a66ebbeb9",
+    "model": null,
+    "name": "run-1",
+    "per_model_usage": null,
+    "per_testing_criteria_results": null,
+    "report_url": "https://ai.azure.com/resource/evaluation",
+    "result_counts": {
+        "errored": 0,
+        "failed": 0,
+        "passed": 0,
+        "total": 0
+    },
+    "shared_with_openai": false,
+    "metadata": {}
+}

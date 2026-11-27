@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.0.41 - 2026-11-27
+
+- Added evaluation apis
+
+## v0.0.40 - 2026-11-25
+
+- Improved fragment rules and fixed reverted rates
+
+## v0.0.39 - 2026-11-19
+
+- Aligned the api policies using fragments
+
 ## v0.0.38 - 2026-10-09
 
 - Aligned readme with current limitations

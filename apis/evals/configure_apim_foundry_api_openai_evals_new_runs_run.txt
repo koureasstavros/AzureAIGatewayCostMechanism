@@ -1,0 +1,134 @@
+OpenAI Evals New Runs
+---------------------------------------
+/api/projects/{project}/openai/evals/{eval}/runs/{run}?api-version={api-version}
+---------------------------------------
+<policies>
+    <inbound>
+        <base />
+        <!-- strip the caller's credentials so only the managed-identity token is sent -->
+        <set-header name="Authorization" exists-action="delete" />
+        <set-header name="api-key" exists-action="delete" />
+        <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
+        <!-- APIM obtains an Entra token for Foundry and adds Authorization: Bearer -->
+        <authentication-managed-identity resource="https://ai.azure.com" />
+        <set-variable name="projectName" value="@(context.Request.MatchedParameters["project"])" />
+        <set-variable name="evalId" value="@(context.Request.MatchedParameters["eval"])" />
+        <set-variable name="runId" value="@(context.Request.MatchedParameters["run"])" />
+        <set-variable name="apiVersionName" value="@(context.Request.Url.Query.GetValueOrDefault("api-version"))" />
+        <rewrite-uri template="@($"/api/projects/{context.Variables["projectName"]}/openai/evals/{context.Variables["evalId"]}/runs/{context.Variables["runId"]}?api-version={context.Variables["apiVersionName"]}")" copy-unmatched-params="false" />
+    </inbound>
+    <!-- Control if and how the requests are forwarded to services  -->
+    <backend>
+        <base />
+    </backend>
+    <!-- Customize the responses -->
+    <outbound>
+        <base />
+    </outbound>
+    <!-- Handle exceptions and customize error responses  -->
+    <on-error>
+        <base />
+    </on-error>
+</policies>
+---------------------------------------
+{
+  "name": "run-1",
+  "data_source": {
+    "type": "jsonl",
+    "source": {
+      "type": "file_content",
+      "content": [
+        {
+          "item": {
+            "messages": [
+              { "role": "user", "content": "What time do you close today?" },
+              { "role": "assistant", "content": "We close at 6 PM today." }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "evaluation_level": "conversation"
+}
+---------------------------------------
+{
+    "object": "eval.run",
+    "created_at": 1795779508,
+    "modified_at": 1795779526,
+    "duration": "PT15.9770257S",
+    "created_by": "9f12ab4a-2d69-4730-b7df-1d28b02f87ec",
+    "id": "evalrun_7e9943d639ef47368e28272a585722bd",
+    "eval_id": "eval_584962439d0043c694785ed3921afe3b",
+    "status": "completed",
+    "data_source": {
+        "type": "jsonl",
+        "source": {
+            "type": "file_content",
+            "content": [
+                {
+                    "item": {
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": "What time do you close today?"
+                            },
+                            {
+                                "role": "assistant",
+                                "content": "We close at 6 PM today."
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "metadata": {
+        "trigger_type": "oneoff"
+    },
+    "properties": {
+        "eval_id": "eval_584962439d0043c694785ed3921afe3b",
+        "runType": "eval_run",
+        "_azureml.evaluation_run": "evaluation.service",
+        "_azureml.evaluate_artifacts": "[{\"path\": \"instance_results.jsonl\", \"type\": \"table\"}]",
+        "DataSourceType": "Jsonl",
+        "job_logs": "azureai://accounts/hub-gpe-shared-eastus2-001/projects/proj-gpe-shared-eastus2-001/evaluationresults/eval-result-evalrun_7e9943d639ef47368e28272a585722bd-HCSK/versions/1"
+    },
+    "name": "run-1",
+    "report_url": "https://ai.azure.com/nextgen/r/A8s2lcLbQCqjWYYyiXjq1g,rg-gpe-shared-eastus2-001,,hub-gpe-shared-eastus2-001,proj-gpe-shared-eastus2-001/build/evaluations/eval_584962439d0043c694785ed3921afe3b/run/evalrun_7e9943d639ef47368e28272a585722bd",
+    "result_counts": {
+        "total": 1,
+        "passed": 1,
+        "failed": 0,
+        "errored": 0,
+        "skipped": 0
+    },
+    "per_model_usage": [
+        {
+            "model_name": "gpt-6-luna-2026-09-22",
+            "invocation_count": 1,
+            "total_tokens": 1895,
+            "prompt_tokens": 1767,
+            "completion_tokens": 128,
+            "cached_tokens": 0
+        },
+        {
+            "model_name": "azure_ai_evaluation",
+            "invocation_count": 1,
+            "total_tokens": 1895,
+            "prompt_tokens": 1767,
+            "completion_tokens": 128,
+            "cached_tokens": 0
+        }
+    ],
+    "per_testing_criteria_results": [
+        {
+            "testing_criteria": "task_completion",
+            "passed": 1,
+            "failed": 0,
+            "errored": 0,
+            "skipped": 0
+        }
+    ],
+    "error": null
+}

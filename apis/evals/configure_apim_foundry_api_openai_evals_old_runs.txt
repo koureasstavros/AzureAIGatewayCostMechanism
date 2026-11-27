@@ -1,0 +1,78 @@
+OpenAI Evals Old Runs
+---------------------------------------
+/openai/evals/{eval}/runs?api-version={api-version}
+---------------------------------------
+<policies>
+    <inbound>
+        <base />
+        <set-variable name="evalId" value="@(context.Request.MatchedParameters["eval"])" />
+        <set-variable name="apiVersionName" value="@(context.Request.Url.Query.GetValueOrDefault("api-version"))" />
+        <rewrite-uri template="@($"/openai/evals/{context.Variables["evalId"]}/runs?api-version={context.Variables["apiVersionName"]}")" copy-unmatched-params="false" />
+    </inbound>
+    <!-- Control if and how the requests are forwarded to services  -->
+    <backend>
+        <base />
+    </backend>
+    <!-- Customize the responses -->
+    <outbound>
+        <base />
+    </outbound>
+    <!-- Handle exceptions and customize error responses  -->
+    <on-error>
+        <base />
+    </on-error>
+</policies>
+---------------------------------------
+{
+  "name": "run-1",
+  "data_source": {
+    "type": "jsonl",
+    "source": {
+      "type": "file_content",
+      "content": [
+        {
+          "item": {
+            "user_message": "What time do you close today?",
+            "assistant_reply": "We close at 6 PM today."
+          }
+        }
+      ]
+    }
+  }
+}
+---------------------------------------
+{
+    "id": "evalrun_6b096b35b500819190735cb3e8e35f0a",
+    "object": "eval.run",
+    "created_at": 1795779382,
+    "status": "queued",
+    "data_source": {
+        "type": "jsonl",
+        "source": {
+            "type": "file_content",
+            "content": [
+                {
+                    "item": {
+                        "user_message": "What time do you close today?",
+                        "assistant_reply": "We close at 6 PM today."
+                    }
+                }
+            ]
+        }
+    },
+    "error": null,
+    "eval_id": "eval_6b096b0e65e481918c0405d9d6762dfa",
+    "model": null,
+    "name": "run-1",
+    "per_model_usage": null,
+    "per_testing_criteria_results": null,
+    "report_url": "https://ai.azure.com/resource/evaluation",
+    "result_counts": {
+        "errored": 0,
+        "failed": 0,
+        "passed": 0,
+        "total": 0
+    },
+    "shared_with_openai": false,
+    "metadata": {}
+}

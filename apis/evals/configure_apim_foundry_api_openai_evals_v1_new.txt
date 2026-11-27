@@ -1,0 +1,99 @@
+OpenAI Evals V1 New
+---------------------------------------
+/api/projects/{project}/openai/v1/evals
+---------------------------------------
+<policies>
+    <inbound>
+        <base />
+        <!-- strip the caller's credentials so only the managed-identity token is sent -->
+        <set-header name="Authorization" exists-action="delete" />
+        <set-header name="api-key" exists-action="delete" />
+        <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
+        <!-- APIM obtains an Entra token for Foundry and adds Authorization: Bearer -->
+        <authentication-managed-identity resource="https://ai.azure.com" />
+        <set-variable name="projectName" value="@(context.Request.MatchedParameters["project"])" />
+        <rewrite-uri template="@($"/api/projects/{context.Variables["projectName"]}/openai/v1/evals")" copy-unmatched-params="false" />
+    </inbound>
+    <!-- Control if and how the requests are forwarded to services  -->
+    <backend>
+        <base />
+    </backend>
+    <!-- Customize the responses -->
+    <outbound>
+        <base />
+    </outbound>
+    <!-- Handle exceptions and customize error responses  -->
+    <on-error>
+        <base />
+    </on-error>
+</policies>
+---------------------------------------
+{
+  "name": "booking-agent-eval",
+  "data_source_config": {
+    "type": "custom",
+    "item_schema": {
+      "type": "object",
+      "properties": {
+        "messages": { "type": "array" }
+      },
+      "required": ["messages"]
+    },
+    "include_sample_schema": false
+  },
+  "testing_criteria": [
+    {
+      "type": "azure_ai_evaluator",
+      "name": "task_completion",
+      "evaluator_name": "builtin.task_completion",
+      "initialization_parameters": { "model": "{{openai_model_text}}" },
+      "data_mapping": { "messages": "{{item.messages}}" } //DO NOT MAKE THIS API VARIABLE IS EVAL KEYWORD
+    }
+  ]
+}
+---------------------------------------
+{
+    "object": "eval",
+    "created_at": 1795779618,
+    "modified_at": 1795779618,
+    "created_by": "9f12ab4a-2d69-4730-b7df-1d28b02f87ec",
+    "id": "eval_5b2beba22c4b4108877f3b39b7a00958",
+    "name": "booking-agent-eval",
+    "metadata": {},
+    "properties": {
+        "evals_run_type": "azure_ai"
+    },
+    "data_source_config": {
+        "type": "custom",
+        "item_schema": {},
+        "include_sample_schema": false,
+        "schema": {
+            "item": {
+                "type": "object",
+                "properties": {
+                    "messages": {
+                        "type": "array"
+                    }
+                },
+                "required": [
+                    "messages"
+                ]
+            }
+        }
+    },
+    "testing_criteria": [
+        {
+            "type": "azure_ai_evaluator",
+            "id": "task_completion_cdb9cd31-45b7-4d03-bc7c-55e00a62d099",
+            "name": "task_completion",
+            "evaluator_name": "builtin.task_completion",
+            "evaluator_version": "",
+            "initialization_parameters": {
+                "model": "GPT6LUNA-GS"
+            },
+            "data_mapping": {
+                "messages": "{{item.messages}}"
+            }
+        }
+    ]
+}
