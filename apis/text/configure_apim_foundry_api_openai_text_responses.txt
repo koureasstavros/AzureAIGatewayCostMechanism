@@ -186,7 +186,20 @@ OpenAI Text Responses
     </on-error>
 </policies>
 ---------------------------------------
-{"model":"<model-deployment>","input":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"How are you?"}]}
+{
+    "model": "<deployment_name>",
+    "input":
+    [
+        {
+            "role": "system",
+            "content": "You are a helpful assistant"
+        },
+        {
+            "role": "user",
+            "content": "How are you?"
+        }
+    ]
+}
 ---------------------------------------
 {
     "id": "resp_019391a5d9091984006a3e4fbd97488197908d51ab5106c6f5",

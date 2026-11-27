@@ -179,7 +179,7 @@ OpenAI Audio Translations
 </policies>
 ---------------------------------------
 {
-  "model": "<model-deployment>",
+  "model": "<deployment_name>",
   "file": "<base64-encoded-audio-data>",
   "response_format": "verbose_json"
 }

@@ -173,10 +173,24 @@ Anthropic Text V1 Messages
     </on-error>
 </policies>
 ---------------------------------------
-{"model":"<model-deployment>","max_tokens":1024,"messages":[{"role":"user","content":"string"}],"system":"string","stream":false,"top_k":0,"stop_sequences":["string"]}
+{
+    "model": "<deployment_name>",
+    "max_tokens": <max_output_tokens>,
+    "messages":
+    [
+        {
+            "role": "user",
+            "content": "string"
+        }
+    ],
+    "system":"string",
+    "stream":false,
+    "top_k":0,
+    "stop_sequences":["string"]
+}
 ---------------------------------------
 {
-    "model": "claude-sonnet-4-6",
+    "model": "<deployment_name>",
     "id": "msg_012byRXmRYehou1JpS9Q1CWq",
     "type": "message",
     "role": "assistant",

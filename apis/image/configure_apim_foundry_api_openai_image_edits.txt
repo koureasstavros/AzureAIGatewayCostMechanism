@@ -171,8 +171,8 @@ OpenAI Image Edits
 ---------------------------------------
 {
     "prompt": "<prompt>",
-    "model": "<model-deployment>"
-	"size": "1024x1024",
+    "model": "<deployment_name>"
+	"size": "<image_resolution>",
     "input_image": "<base64-encoded-image-data>",
     "n": 1
 }

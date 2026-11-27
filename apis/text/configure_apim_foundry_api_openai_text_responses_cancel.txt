@@ -21,3 +21,6 @@ OpenAI Text Responses Cancel
         <base />
     </on-error>
 </policies>
+---------------------------------------
+NO POST RAW CONTENT
+---------------------------------------

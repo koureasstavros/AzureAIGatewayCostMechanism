@@ -145,7 +145,10 @@ OpenAI Text V1 Embeddings
     </on-error>
 </policies>
 ---------------------------------------
-{"model":"<model-deployment>","input":"How are you?"}
+{
+    "model": "<deployment_name>",
+    "input": "How are you?"
+}
 ---------------------------------------
 {
     "object": "list",

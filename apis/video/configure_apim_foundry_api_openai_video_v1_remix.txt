@@ -153,10 +153,10 @@ OpenAI Video V1 Generations
     "completed_at": null,
     "error": null,
     "expires_at": null,
-    "model": "<model>",
+    "model": "<deployment_name>",
     "progress": 0,
     "prompt": "Fix this",
     "remixed_from_video_id": "video_<guid>",
     "seconds": "4",
-    "size": "720x1280"
+    "size": "<video_resolution>"
 }

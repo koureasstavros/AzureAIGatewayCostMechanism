@@ -5,5 +5,6 @@ OpenAI Video V1 Generations
 <set-variable name="videoId" value="@(context.Request.MatchedParameters["video-id"])" />        
 <rewrite-uri template="@($"/openai/v1/videos/{context.Variables["videoId"]}/content")" copy-unmatched-params="false" />
 ---------------------------------------
-
+NO POST RAW CONTENT
 ---------------------------------------
+<video_bytes>

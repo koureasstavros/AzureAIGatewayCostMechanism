@@ -193,7 +193,7 @@ OpenAI Text Responses Compact
 </policies>
 -------------------------
 {
-    "model": "{{openai_model_text}}",
+    "model": "{deployment_name}",
     "input":
     [
         {

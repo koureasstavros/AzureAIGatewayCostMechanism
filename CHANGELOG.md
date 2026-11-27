@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.42 - 2026-11-27
+
+- Aligned schema, format and variables 
+
 ## v0.0.41 - 2026-11-27
 
 - Added evaluation apis

@@ -24,23 +24,7 @@ OpenAI Evals Old Runs Run
     </on-error>
 </policies>
 ---------------------------------------
-{
-  "name": "run-1",
-  "data_source": {
-    "type": "jsonl",
-    "source": {
-      "type": "file_content",
-      "content": [
-        {
-          "item": {
-            "user_message": "What time do you close today?",
-            "assistant_reply": "We close at 6 PM today."
-          }
-        }
-      ]
-    }
-  }
-}
+NO POST RAW CONTENT
 ---------------------------------------
 {
     "id": "evalrun_6b096b35b500819190735cb3e8e35f0a",

@@ -30,26 +30,7 @@ OpenAI Evals V1 New Runs Run
     </on-error>
 </policies>
 ---------------------------------------
-{
-  "name": "run-1",
-  "data_source": {
-    "type": "jsonl",
-    "source": {
-      "type": "file_content",
-      "content": [
-        {
-          "item": {
-            "messages": [
-              { "role": "user", "content": "What time do you close today?" },
-              { "role": "assistant", "content": "We close at 6 PM today." }
-            ]
-          }
-        }
-      ]
-    }
-  },
-  "evaluation_level": "conversation"
-}
+NO POST RAW CONTENT
 ---------------------------------------
 {
     "object": "eval.run",

@@ -252,7 +252,20 @@ OpenAI Text Completions
     </on-error>
 </policies>
 ---------------------------------------
-{"model":"<model-deployment>","messages":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"How are you?"}]}
+{
+    "model": "<deployment_name>",
+    "messages":
+    [
+        {
+            "role": "system",
+            "content": "You are a helpful assistant"
+        },
+        {
+            "role": "user",
+            "content": "How are you?"
+        }
+    ]
+}
 ---------------------------------------
 {
 	"id": "string",
@@ -301,3 +314,4 @@ OpenAI Text Completions
 			"cached_tokens": 0
 		}
 	}
+}
